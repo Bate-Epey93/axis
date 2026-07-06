@@ -271,10 +271,16 @@ function addMetric(type, value) {
 let currentTab = "today";
 let moreView = "menu";   // menu | equip | recovery
 let libCat = "all";
+let lastScreenKey = null;
 function render() {
   const scr = $("#screen");
   if (!S.onboarded) { scr.innerHTML = renderOnboarding(); bindOnboarding(); $("#tabbar").classList.add("hidden"); return; }
   $("#tabbar").classList.remove("hidden");
+  // same screen re-rendering (e.g. toggling a control) keeps its scroll position
+  // and skips the entry animation; only a real navigation resets to top
+  const key = currentTab + "/" + moreView + "/" + (currentTab === "plan" ? planView : "") + "/" + (currentTab === "library" ? libCat : "");
+  const samePage = key === lastScreenKey;
+  const prevScroll = samePage ? scr.scrollTop : 0;
   if (currentTab === "today") scr.innerHTML = renderToday();
   else if (currentTab === "library") scr.innerHTML = renderLibrary();
   else if (currentTab === "progress") { scr.innerHTML = renderProgress(); drawAllCharts(); }
@@ -285,7 +291,9 @@ function render() {
     else scr.innerHTML = renderMoreMenu();
   }
   $$("#tabbar .tab").forEach(t => t.classList.toggle("active", t.dataset.tab === currentTab));
-  scr.scrollTop = 0;
+  scr.classList.toggle("anim", !samePage);
+  scr.scrollTop = prevScroll;
+  lastScreenKey = key;
 }
 
 /* ---------- brush motifs: one stroke per domain ---------- */
@@ -845,7 +853,7 @@ function renderBuilder() {
     <div class="overlay-hdr"><h2>Build a workout</h2><button class="x-btn" data-b="close">✕</button></div>
     <input class="big-input" id="bw-name" placeholder="Name it — e.g. Hotel-room burner" value="${esc(builder.name)}" style="text-align:left; font-size:1.05rem; font-weight:600;">
     <div class="sec">Timer</div>
-    <div class="cat-row">${Object.entries(WORKOUT_MODES).map(([k, v]) =>
+    <div class="cat-row wrap">${Object.entries(WORKOUT_MODES).map(([k, v]) =>
       `<button class="cat-chip ${builder.mode === k ? "on" : ""}" data-b="mode" data-mode="${k}">${v.label}</button>`).join("")}</div>
     <div class="meta" style="margin:0 2px 10px;">${WORKOUT_MODES[builder.mode].hint}</div>
     ${builderCfgUI()}
@@ -853,18 +861,18 @@ function renderBuilder() {
     <div class="card">${exList || `<div class="info-note">Nothing yet. Start anywhere — the suggestions below keep the workout balanced.</div>`}</div>
     ${sugg.length ? `
       <div class="sec">Pairs well</div>
-      <div class="cat-row">${sugg.map(s => `<button class="cat-chip" data-b="add" data-id="${s.ex.id}">＋ ${esc(s.ex.name)} · ${s.why}</button>`).join("")}</div>` : ""}
+      <div class="cat-row wrap">${sugg.map(s => `<button class="cat-chip" data-b="add" data-id="${s.ex.id}">＋ ${esc(s.ex.name)} · ${s.why}</button>`).join("")}</div>` : ""}
     <button class="btn ghost" data-b="pick">Browse all exercises</button>
     <div class="sec">Where it lives</div>
-    <div class="cat-row">
+    <div class="cat-row wrap">
       <button class="cat-chip ${builder.place.type === "list" ? "on" : ""}" data-b="place" data-place="list">Just save it</button>
       <button class="cat-chip ${builder.place.type === "today" ? "on" : ""}" data-b="place" data-place="today">Today's workout</button>
       <button class="cat-chip ${builder.place.type === "day" ? "on" : ""}" data-b="place" data-place="day">Replace a weekly day</button>
     </div>
     ${builder.place.type === "day" ? `
-      <div class="cat-row">${effectiveWeekOrder().map((tid, i) => tid === "rest" ? "" :
+      <div class="cat-row wrap">${effectiveWeekOrder().map((tid, i) => tid === "rest" ? "" :
         `<button class="cat-chip ${builder.place.day === i ? "on" : ""}" data-b="pday" data-day="${i}">D${i+1} · ${esc(TEMPLATES[tid].label.split(" ")[0])}</button>`).join("")}</div>
-      <div class="cat-row">
+      <div class="cat-row wrap">
         <button class="cat-chip ${builder.place.perpetual ? "on" : ""}" data-b="perp" data-v="1">Every week</button>
         <button class="cat-chip ${!builder.place.perpetual ? "on" : ""}" data-b="perp" data-v="0">This week only</button>
       </div>` : ""}
