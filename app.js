@@ -660,17 +660,19 @@ function renderPlan() {
 function renderPlanWeek() {
   const ramp = isRampWeeks();
   const rows = effectiveWeekOrder().map((tid, i) => {
-    const ow = activeDayOverride(i);
+    const todayPin = (i === programDay() && S.todayOverride && S.todayOverride.date === todayISO())
+      ? (S.customWorkouts || []).find(x => x.id === S.todayOverride.id) : null;
+    const ow = todayPin || activeDayOverride(i);
     const t = ow ? customAsTemplate(ow) : TEMPLATES[tid];
     const isGymDay = S.gymDays.includes(i);
     return `
       <div class="week-row">
         <div class="day-l num">Day ${i+1}${programDay()===i ? " ●" : ""}</div>
         <div style="flex:1">
-          <div class="day-name"><span class="dot ${t.color}" style="display:inline-block; margin-right:6px;"></span>${esc(t.label)}${ow ? ` <span class="chip hiit on" style="font-size:0.54rem; padding:2px 7px;">custom</span>` : ""}</div>
+          <div class="day-name"><span class="dot ${t.color}" style="display:inline-block; margin-right:6px;"></span>${esc(t.label)}${ow ? ` <span class="chip hiit on" style="font-size:0.54rem; padding:2px 7px;">${todayPin ? "today only" : "custom"}</span>` : ""}</div>
           <div class="day-sub">${esc(t.desc)}</div>
         </div>
-        ${ow ? `<button class="swap-btn" data-act="clear-override" data-day="${i}">✕</button>`
+        ${ow ? `<button class="swap-btn" data-act="clear-override" data-day="${i}" data-kind="${todayPin ? "today" : "day"}">✕</button>`
              : t.type !== "REST" ? `<button class="gym-toggle num ${isGymDay ? "on" : ""}" data-act="toggle-gym" data-day="${i}">${isGymDay ? "GYM" : "HOME"}</button>` : ""}
       </div>`;
   }).join("");
@@ -2075,7 +2077,8 @@ $("#screen").addEventListener("click", e => {
   if (act === "auto-schedule") autoSchedule();
   if (act === "plan-view") { planView = b.dataset.view; render(); }
   if (act === "clear-override") {
-    delete S.dayOverrides[b.dataset.day];
+    if (b.dataset.kind === "today") S.todayOverride = null;
+    else delete S.dayOverrides[b.dataset.day];
     save(); render(); toast("Back to the standard plan for that day");
   }
   if (act === "open-builder") openBuilder();
