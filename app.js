@@ -18,6 +18,8 @@ const defaultState = () => ({
   pfPosition: "lying",
   lastBackup: null,
   customWorkouts: [],
+  todayOverride: null,           // {id, date} — custom workout pinned to today
+  dayOverrides: {},              // dayIdx -> {id, until|null} — custom workout replacing a weekly day
   settings: { coherenceRate: 6, sound: true },
 });
 let S = load();
@@ -134,7 +136,27 @@ function programWeek() {
 function isRampWeeks() { return programWeek() <= 2; }
 function isDeload() { return S.deloadUntil && todayISO() <= S.deloadUntil; }
 function effectiveWeekOrder() { return isRampWeeks() ? WEEK_RAMP : S.weekOrder; }
-function todayTemplate() { return TEMPLATES[effectiveWeekOrder()[programDay()]]; }
+function customAsTemplate(w) {
+  return { id: "custom_" + w.id, label: w.name, type: "CUSTOM", color: "hiit",
+    desc: WORKOUT_MODES[w.mode].label + " · " + customSummary(w),
+    slots: w.exIds, custom: w };
+}
+function activeDayOverride(dayIdx) {
+  const o = (S.dayOverrides || {})[dayIdx];
+  if (!o) return null;
+  if (o.until && todayISO() > o.until) return null;
+  return (S.customWorkouts || []).find(x => x.id === o.id) || null;
+}
+function todayTemplate() {
+  const t = S.todayOverride;
+  if (t && t.date === todayISO()) {
+    const w = (S.customWorkouts || []).find(x => x.id === t.id);
+    if (w) return customAsTemplate(w);
+  }
+  const w = activeDayOverride(programDay());
+  if (w) return customAsTemplate(w);
+  return TEMPLATES[effectiveWeekOrder()[programDay()]];
+}
 function weeksSinceDeload() {
   const anchor = S.lastDeloadPrompt || S.programStart;
   if (!anchor) return 0;
@@ -285,6 +307,14 @@ function motifSVG(kind, color) {
   </svg>`;
 }
 const MOTIF_COLORS = { pelvic:"var(--c-pelvic)", breath:"var(--c-breath)", mobility:"var(--c-mobility)", mind:"var(--c-mind)", strength:"var(--c-strength)", nutrition:"var(--c-nutrition)" };
+
+/* brush-flame streak mark (replaces the emoji) */
+function flameSVG(color) {
+  return `<svg class="flame" viewBox="0 0 100 100" aria-hidden="true" style="color:${color}">
+    <path d="M50 12 C66 32 76 46 76 62 A26 26 0 1 1 24 62 C24 46 34 32 50 12 Z" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M50 46 C57 54 61 60 61 66 A11 11 0 1 1 39 66 C39 60 43 54 50 46 Z" fill="none" stroke="currentColor" stroke-width="5" opacity="0.55"/>
+  </svg>`;
+}
 const PATTERN_MOTIF = {
   SQUAT:  ["strength","var(--c-strength)"], HINGE: ["strength","var(--c-amber)"], LUNGE: ["strength","var(--c-strength)"],
   CARRY:  ["strength","var(--c-amber)"],
@@ -336,7 +366,7 @@ function renderToday() {
         <div class="eyebrow">Day ${programDay()+1} · ${tpl.type}${isDeload() ? " · deload −40%" : ""}${isRampWeeks() ? " · week "+week+" ramp" : ""}</div>
         <h2 class="hero-title">${esc(tpl.label)}</h2>
         <div class="meta">${esc(tpl.desc)}</div>
-        <div class="meta num" style="margin-top:6px;">${tpl.slots.length} movement slots · fills with what you have today</div>
+        <div class="meta num" style="margin-top:6px;">${tpl.custom ? tpl.custom.exIds.length + " exercises · your own build" : tpl.slots.length + " movement slots · fills with what you have today"}</div>
         <button class="btn ${tpl.color}" data-act="open-session">${doneToday ? "✓ Completed — reopen" : "Start session"}</button>
       </div>`;
   }
@@ -373,7 +403,7 @@ function renderToday() {
       <div>
         <div class="t-name">${t.name}</div>
         <div class="t-sub">${t.sub}</div>
-        <div class="streak num" style="margin-top:6px;"><span class="flame">🔥</span>${t.streak}d</div>
+        <div class="streak num" style="margin-top:6px; color:${MOTIF_COLORS[t.cls]};">${flameSVG(MOTIF_COLORS[t.cls])} ${t.streak}d</div>
       </div>
       <div class="t-check">✓</div>
     </button>`).join("") + `</div>`;
@@ -393,7 +423,7 @@ function renderToday() {
 
   return `
     <div class="hdr"><h1>Axis</h1><span class="date">${esc(dateStr)}</span></div>
-    <div class="sub num">Week ${week} · Day ${programDay()+1} of 7 · workout streak <b>🔥 ${workoutStreak()}d</b></div>
+    <div class="sub num"><span style="color:var(--c-strength); font-weight:700;">Week ${week} · Day ${programDay()+1} of 7</span><span style="color:var(--text-3);"> · </span><span style="color:var(--c-mind); font-weight:700;">${flameSVG("var(--c-mind)")} ${workoutStreak()}-day streak</span></div>
     ${warn}${deloadCard}
     ${sessionCard}
     <div class="sec">Daily tracks — the floor</div>
@@ -552,7 +582,7 @@ function renderProgress() {
           <div style="text-align:right;"><div class="val num">${latest ? latest.value + " " + def.unit : "—"}</div>${deltaHtml}</div>
         </div>
         ${series.length > 1 ? `<canvas data-chart="${t}" width="600" height="300"></canvas>` : `<div class="info-note">Log at least two entries to see the trend.</div>`}
-        <button class="btn ghost sm" style="margin-top:10px;" data-act="log-metric" data-type="${t}">Log ${def.label.toLowerCase()}</button>
+        <button class="btn sm tint" style="--tint:${def.color}; margin-top:10px;" data-act="log-metric" data-type="${t}">＋ Log ${def.label.toLowerCase()}</button>
       </div>`;
   }).join("");
   const deloadIn = Math.max(0, 5 - weeksSinceDeload());
@@ -599,22 +629,12 @@ function drawAllCharts() {
 }
 
 /* ---------- Plan ---------- */
+let planView = "week"; // day | week | month
 function renderPlan() {
-  const ramp = isRampWeeks();
-  const rows = effectiveWeekOrder().map((tid, i) => {
-    const t = TEMPLATES[tid];
-    const isGymDay = S.gymDays.includes(i);
-    const isStrength = t.type === "STRENGTH";
-    return `
-      <div class="week-row">
-        <div class="day-l num">Day ${i+1}${programDay()===i ? " ●" : ""}</div>
-        <div style="flex:1">
-          <div class="day-name"><span class="dot ${t.color}" style="display:inline-block; margin-right:6px;"></span>${esc(t.label)}</div>
-          <div class="day-sub">${esc(t.desc)}</div>
-        </div>
-        ${t.type !== "REST" ? `<button class="gym-toggle num ${isGymDay ? "on" : ""}" data-act="toggle-gym" data-day="${i}">${isGymDay ? "GYM" : "HOME"}</button>` : ""}
-      </div>`;
-  }).join("");
+  const seg = `
+    <div class="cat-row" style="margin-bottom:6px;">
+      ${["day","week","month"].map(v => `<button class="cat-chip ${planView === v ? "on" : ""}" data-act="plan-view" data-view="${v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join("")}
+    </div>`;
   const myWorkouts = (S.customWorkouts || []).map(w => `
     <div class="card stripe hiit">
       <div class="card-row">
@@ -626,20 +646,118 @@ function renderPlan() {
       </div>
       <button class="btn hiit sm" style="margin-top:12px;" data-act="run-custom" data-id="${w.id}">Run</button>
     </div>`).join("");
-  return `
-    <div class="hdr"><h1>Week plan</h1></div>
-    <div class="sub">Mark which days the gym is likely. The heavy strength days should land on gym days — but every session has a full home fallback, so nothing blocks you.</div>
-    ${ramp ? `<div class="card due-card"><h3>Weeks 1–2 ramp</h3><div class="meta">You're on the ramp week: 3 form-focused strength days, 1 HIIT, light days between. The full 6-day split (power day, zone-2, plyo, reaction) takes over in week 3.</div></div>` : ""}
-    <div class="card">${rows}</div>
+  const workoutsSection = `
     <div class="sec">My workouts</div>
     ${myWorkouts || `<div class="card"><div class="info-note">Nothing built yet. Pick your exercises, choose a timer (HIIT, Tabata, EMOM, AMRAP, rounds, or plain sets), and the pairing brain will suggest what complements what.</div></div>`}
     <button class="btn primary" data-act="open-builder">＋ Build a workout</button>
-    <div style="height:8px;"></div>
+    <div style="height:8px;"></div>`;
+  const body = planView === "day" ? renderPlanDay() : planView === "month" ? renderPlanMonth() : renderPlanWeek();
+  return `
+    <div class="hdr"><h1>Plan</h1></div>
+    ${seg}${body}${workoutsSection}`;
+}
+
+function renderPlanWeek() {
+  const ramp = isRampWeeks();
+  const rows = effectiveWeekOrder().map((tid, i) => {
+    const ow = activeDayOverride(i);
+    const t = ow ? customAsTemplate(ow) : TEMPLATES[tid];
+    const isGymDay = S.gymDays.includes(i);
+    return `
+      <div class="week-row">
+        <div class="day-l num">Day ${i+1}${programDay()===i ? " ●" : ""}</div>
+        <div style="flex:1">
+          <div class="day-name"><span class="dot ${t.color}" style="display:inline-block; margin-right:6px;"></span>${esc(t.label)}${ow ? ` <span class="chip hiit on" style="font-size:0.54rem; padding:2px 7px;">custom</span>` : ""}</div>
+          <div class="day-sub">${esc(t.desc)}</div>
+        </div>
+        ${ow ? `<button class="swap-btn" data-act="clear-override" data-day="${i}">✕</button>`
+             : t.type !== "REST" ? `<button class="gym-toggle num ${isGymDay ? "on" : ""}" data-act="toggle-gym" data-day="${i}">${isGymDay ? "GYM" : "HOME"}</button>` : ""}
+      </div>`;
+  }).join("");
+  return `
+    <div class="sub">Mark which days the gym is likely. Heavy strength days should land on gym days — but every session has a full home fallback, so nothing blocks you.</div>
+    ${isRampWeeks() ? `<div class="card due-card"><h3>Weeks 1–2 ramp</h3><div class="meta">You're on the ramp week: 3 form-focused strength days, 1 HIIT, light days between. The full 6-day split takes over in week 3.</div></div>` : ""}
+    <div class="card">${rows}</div>
     <div class="card">
       <h3>Scheduler rules</h3>
       <div class="info-note">· 6 days on, 1 off — the rest day is protected.<br>· Two heavy strength days are never stacked back-to-back.<br>· Any session is completable with band + bodyweight; gym just raises the ceiling.</div>
       <button class="btn ghost sm" style="margin-top:12px;" data-act="auto-schedule">Re-balance week around my gym days</button>
     </div>`;
+}
+
+function renderPlanDay() {
+  const tpl = todayTemplate();
+  const isGymDay = S.gymDays.includes(programDay());
+  const doneToday = S.workoutLogs.some(l => l.date === todayISO() && l.completed && l.templateId === tpl.id);
+  let slotRows = "";
+  if (tpl.custom) {
+    slotRows = tpl.custom.exIds.map(id => {
+      const ex = EXERCISES.find(e => e.id === id);
+      return ex ? `<div class="eq-row"><div><div class="eq-name">${esc(ex.name)}</div><div class="eq-unlocks">${PATTERN_LABEL[ex.pattern]}</div></div><span class="tag ${ex.pattern}">${PATTERN_LABEL[ex.pattern]}</span></div>` : "";
+    }).join("");
+  } else if (tpl.slots.length) {
+    const avail = availableEquipment(isGymDay ? "gym" : "home");
+    slotRows = tpl.slots.filter(s => !(s.week3 && isRampWeeks())).map(slot => {
+      const ex = ["MOBILITY","BREATH_HOLD"].includes(slot.pattern) ? null : pickExercise(slot.pattern, avail);
+      const rx = slot.rx;
+      return `
+        <div class="eq-row">
+          <div><div class="eq-name">${ex ? esc(ex.name) : esc(slot.target)}</div>
+          <div class="eq-unlocks">${esc(slot.target)} · ${rx.sets}×${rx.repLo}–${rx.repHi}${rx.unit === "s" ? " s" : rx.unit === "min" ? " min" : ""}</div></div>
+          <span class="tag ${slot.pattern}">${PATTERN_LABEL[slot.pattern] || slot.pattern}</span>
+        </div>`;
+    }).join("");
+  }
+  const tl = S.trackLogs[todayISO()] || {};
+  const trackLine = ["pelvic","breath","mobility","mind"].map(k => `${tl[k] ? "✓" : "·"} ${k === "mind" ? "meditation" : k === "pelvic" ? "pelvic floor" : k}`).join("   ");
+  return `
+    <div class="sub">What today holds, exercise by exercise${tpl.custom ? "" : " — resolved for " + (isGymDay ? "the gym" : "home") + " gear"}.</div>
+    <div class="card stripe ${tpl.color}">
+      <div class="chip ${tpl.color} on">Day ${programDay()+1} · ${tpl.type}</div>
+      <h3 style="margin-top:8px;">${esc(tpl.label)}${doneToday ? " ✓" : ""}</h3>
+      <div class="meta">${esc(tpl.desc)}</div>
+      ${slotRows ? `<div style="margin-top:8px;">${slotRows}</div>` : `<div class="info-note">Full rest. The daily tracks below still count.</div>`}
+      ${tpl.type !== "REST" ? `<button class="btn ${tpl.color}" style="margin-top:14px;" data-act="open-session">${doneToday ? "✓ Completed — reopen" : "Start session"}</button>` : ""}
+    </div>
+    <div class="card"><h3>Daily tracks</h3><div class="meta num" style="letter-spacing:0.02em;">${trackLine}</div></div>`;
+}
+
+function renderPlanMonth() {
+  const start = new Date(); start.setDate(start.getDate() - programDay());
+  const doneDates = new Set(S.workoutLogs.filter(l => l.completed).map(l => l.date));
+  const curWeek = programWeek();
+  let rows = "";
+  for (let r = 0; r < 4; r++) {
+    let cells = "";
+    for (let c = 0; c < 7; c++) {
+      const d = new Date(start); d.setDate(start.getDate() + r * 7 + c);
+      const iso = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+      const weekN = curWeek + r;
+      const order = weekN <= 2 ? WEEK_RAMP : S.weekOrder;
+      const ow = activeDayOverride(c);
+      const t = (r === 0 && ow) ? customAsTemplate(ow) : TEMPLATES[order[c]];
+      const isToday = iso === todayISO();
+      const done = doneDates.has(iso);
+      cells += `
+        <div class="mcell ${isToday ? "today" : ""} ${iso < todayISO() && !done && t.type !== "REST" ? "missed" : ""}">
+          <div class="mnum num">${d.getDate()}</div>
+          <div class="dot ${t.color}" style="margin:3px auto 0;"></div>
+          <div class="mdone">${done ? "✓" : ""}</div>
+        </div>`;
+    }
+    const deloadFlag = (curWeek + r) % 6 === 5;
+    rows += `<div class="mweek"><div class="mweek-label num">W${curWeek + r}${deloadFlag ? " ·deload?" : ""}</div><div class="mgrid">${cells}</div></div>`;
+  }
+  return `
+    <div class="sub">The next four weeks at a glance. Dots show the session type; ✓ marks completed days.</div>
+    <div class="card">${rows}</div>
+    <div class="card"><div class="meta">
+      <span class="dot strength" style="display:inline-block;"></span> strength &nbsp;
+      <span class="dot hiit" style="display:inline-block;"></span> conditioning &nbsp;
+      <span class="dot breath" style="display:inline-block;"></span> zone-2 &nbsp;
+      <span class="dot mobility" style="display:inline-block;"></span> light &nbsp;
+      <span class="dot rest" style="display:inline-block;"></span> rest
+    </div></div>`;
 }
 
 /* ---------- custom workout builder ---------- */
@@ -665,7 +783,7 @@ const CFG_META = {
 
 let builder = null;
 function openBuilder() {
-  builder = { name: "", mode: "sets", cfg: { ...WORKOUT_MODES.sets.cfg }, exIds: [] };
+  builder = { name: "", mode: "sets", cfg: { ...WORKOUT_MODES.sets.cfg }, exIds: [], place: { type: "list", day: 0, perpetual: true } };
   renderBuilder();
 }
 
@@ -735,6 +853,20 @@ function renderBuilder() {
       <div class="sec">Pairs well</div>
       <div class="cat-row">${sugg.map(s => `<button class="cat-chip" data-b="add" data-id="${s.ex.id}">＋ ${esc(s.ex.name)} · ${s.why}</button>`).join("")}</div>` : ""}
     <button class="btn ghost" data-b="pick">Browse all exercises</button>
+    <div class="sec">Where it lives</div>
+    <div class="cat-row">
+      <button class="cat-chip ${builder.place.type === "list" ? "on" : ""}" data-b="place" data-place="list">Just save it</button>
+      <button class="cat-chip ${builder.place.type === "today" ? "on" : ""}" data-b="place" data-place="today">Today's workout</button>
+      <button class="cat-chip ${builder.place.type === "day" ? "on" : ""}" data-b="place" data-place="day">Replace a weekly day</button>
+    </div>
+    ${builder.place.type === "day" ? `
+      <div class="cat-row">${effectiveWeekOrder().map((tid, i) => tid === "rest" ? "" :
+        `<button class="cat-chip ${builder.place.day === i ? "on" : ""}" data-b="pday" data-day="${i}">D${i+1} · ${esc(TEMPLATES[tid].label.split(" ")[0])}</button>`).join("")}</div>
+      <div class="cat-row">
+        <button class="cat-chip ${builder.place.perpetual ? "on" : ""}" data-b="perp" data-v="1">Every week</button>
+        <button class="cat-chip ${!builder.place.perpetual ? "on" : ""}" data-b="perp" data-v="0">This week only</button>
+      </div>` : ""}
+    ${builder.place.type === "today" ? `<div class="meta" style="margin:0 2px 8px;">Shows as the hero on Today for the rest of the day, then the normal plan resumes.</div>` : ""}
     <button class="btn primary" style="margin-top:10px;" data-b="save">Save workout</button>
     <div style="height:70px;"></div>`;
   ov.oninput = e => { if (e.target.id === "bw-name") builder.name = e.target.value; };
@@ -752,12 +884,31 @@ function renderBuilder() {
     if (k === "rm") { builder.exIds = builder.exIds.filter(x => x !== b.dataset.id); renderBuilder(); }
     if (k === "add") { builder.exIds.push(b.dataset.id); renderBuilder(); }
     if (k === "pick") openBuilderPicker();
+    if (k === "place") { builder.place.type = b.dataset.place; renderBuilder(); }
+    if (k === "pday") { builder.place.day = parseInt(b.dataset.day); renderBuilder(); }
+    if (k === "perp") { builder.place.perpetual = b.dataset.v === "1"; renderBuilder(); }
     if (k === "save") {
       if (!builder.exIds.length) { toast("Add at least one exercise"); return; }
       const w = { id: Date.now().toString(36), name: builder.name.trim() || "My workout", mode: builder.mode, cfg: builder.cfg, exIds: builder.exIds };
-      S.customWorkouts.push(w); save();
-      closeOverlay(); currentTab = "plan"; render();
-      toast(`"${w.name}" saved — it lives in Plan`);
+      S.customWorkouts.push(w);
+      let msg = `"${w.name}" saved — it lives in Plan`;
+      if (builder.place.type === "today") {
+        S.todayOverride = { id: w.id, date: todayISO() };
+        msg = `"${w.name}" is today's workout`;
+      } else if (builder.place.type === "day") {
+        let until = null;
+        if (!builder.place.perpetual) {
+          const d = new Date(); d.setDate(d.getDate() - programDay() + builder.place.day);
+          if (d < new Date(todayISO())) d.setDate(d.getDate() + 7);
+          until = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+        }
+        S.dayOverrides = S.dayOverrides || {};
+        S.dayOverrides[builder.place.day] = { id: w.id, until };
+        msg = `"${w.name}" now replaces Day ${builder.place.day + 1}${until ? " this week" : " every week"}`;
+      }
+      save();
+      closeOverlay(); currentTab = builder.place.type === "today" ? "today" : "plan"; render();
+      toast(msg);
     }
   };
 }
@@ -1068,12 +1219,18 @@ function renderRecovery() {
 let obStep = 0; const obData = { metrics:{} };
 function renderOnboarding() {
   if (obStep === 0) return `
-    <div style="display:flex; flex-direction:column; justify-content:center; min-height:80vh; gap:14px;">
-      <div class="chip breath on" style="align-self:flex-start;">Peak-Condition Protocol</div>
-      <h1 style="font-size:2.6rem; line-height:1.05;">Axis</h1>
-      <p style="color:var(--text-2); font-size:1.05rem; line-height:1.55;">One plan. Six days on, one off. The app knows the protocol, tracks the loads, and always has a version of today's session you can actually do — gym or no gym.</p>
-      <p style="color:var(--text-3); font-size:0.85rem; line-height:1.5;">Weeks 1–2 run in ramp mode: form-focused strength, daily tracks, baselines. Plyo and reaction work unlock in week 3.</p>
-      <button class="btn primary" data-act="ob-next">Set my baselines</button>
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:82vh; gap:18px; padding:0 8px;">
+      <h1 style="font-size:3.2rem; line-height:1;">Axis</h1>
+      <svg viewBox="0 0 100 100" aria-hidden="true" style="width:88px; height:88px; color:var(--c-strength);">
+        <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="5"
+          stroke-linecap="round" stroke-dasharray="200 39" transform="rotate(-64 50 50)" opacity="0.9"/>
+        <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-dasharray="30 209" transform="rotate(-80 50 50)" opacity="0.35"/>
+        <circle cx="50" cy="50" r="7" fill="currentColor"/>
+      </svg>
+      <p style="color:var(--text-2); font-size:1.05rem; line-height:1.6; max-width:32ch;">A personal training companion — strength, breathing, mobility, and recovery on one axis.</p>
+      <p style="color:var(--text-3); font-size:0.87rem; line-height:1.6; max-width:36ch;">For one person training six days a week with whatever's on hand — a gym, a single band, or nothing. The focus: strong and lean, breathing better, moving younger.</p>
+      <button class="btn primary" style="max-width:280px;" data-act="ob-next">Set my baselines</button>
     </div>`;
   if (obStep === 1) {
     return `
@@ -1115,6 +1272,7 @@ let session = null; // { templateId, location, avail, slots:[{slot, ex, sets:[{r
 function openLocationSheet() {
   const tpl = todayTemplate();
   if (tpl.type === "REST") { toast("Rest day — nothing to run. Enjoy it."); return; }
+  if (tpl.custom) { runCustom(tpl.custom.id); return; }
   showSheet(`
     <h3>Where are you today?</h3>
     <button class="opt-row" data-loc="gym"><span class="o-ico">🏋️</span><span>At the gym<span class="o-sub">Full equipment — heavy compounds selected</span></span></button>
@@ -1157,6 +1315,7 @@ function renderSession() {
       <div><h2>${esc(tpl.label)}</h2><div class="meta" style="color:var(--text-2); font-size:0.8rem;">${locLabel}${isDeload() ? " · deload −40% volume" : ""}${isRampWeeks() ? " · ramp mode" : ""}</div></div>
       <button class="x-btn" data-act="close-session">✕</button>
     </div>
+    ${slots.some(s => s.sets && s.sets.length > 1) ? `<div class="info-note" style="margin:-4px 0 12px;">3×8–12 means 3 sets (rounds) of 8–12 reps (repetitions). Tap ✓ after each set — the rest timer runs itself. Tap any colored tag to learn the movement.</div>` : ""}
     ${slots.map((s, si) => renderSlot(s, si)).join("")}
     <button class="btn primary" style="margin-top:8px;" data-act="finish-session">Finish session</button>
     <div style="height:90px;"></div>`;
@@ -1914,6 +2073,11 @@ $("#screen").addEventListener("click", e => {
     save(); render();
   }
   if (act === "auto-schedule") autoSchedule();
+  if (act === "plan-view") { planView = b.dataset.view; render(); }
+  if (act === "clear-override") {
+    delete S.dayOverrides[b.dataset.day];
+    save(); render(); toast("Back to the standard plan for that day");
+  }
   if (act === "open-builder") openBuilder();
   if (act === "run-custom") runCustom(b.dataset.id);
   if (act === "del-custom") {
@@ -1978,6 +2142,14 @@ $("#screen").addEventListener("click", e => {
       sheet.querySelector("#reset-no").onclick = closeSheet;
     });
   }
+});
+
+/* ---------- tap any pattern tag for a plain-language explanation ---------- */
+document.addEventListener("click", e => {
+  const t = e.target.closest(".tag");
+  if (!t) return;
+  const p = [...t.classList].find(c => PATTERN_EXPLAIN[c]);
+  if (p) toast(PATTERN_LABEL[p] + " — " + PATTERN_EXPLAIN[p], 3800);
 });
 
 /* ---------- glass gloss: specular highlight tracks the pointer ---------- */

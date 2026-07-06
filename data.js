@@ -111,7 +111,7 @@ const EXERCISES = [
 /* Session templates: slots reference movement patterns, never exercises. */
 const TEMPLATES = {
   lower: {
-    id:"lower", label:"Lower strength", type:"STRENGTH", color:"strength",
+    id:"lower", label:"Lower body strength", type:"STRENGTH", color:"strength",
     desc:"Squat + hinge focus. Heavy if at the gym.",
     slots: [
       { pattern:"SQUAT",  target:"Quads / glutes",         rx:{ sets:3, repLo:8, repHi:12, rest:90 } },
@@ -131,7 +131,7 @@ const TEMPLATES = {
     ],
   },
   upper: {
-    id:"upper", label:"Upper strength", type:"STRENGTH", color:"strength",
+    id:"upper", label:"Upper body strength", type:"STRENGTH", color:"strength",
     desc:"Push + pull. Heavy if at the gym.",
     slots: [
       { pattern:"H_PUSH", target:"Chest / triceps",        rx:{ sets:3, repLo:8, repHi:12, rest:90 } },
@@ -355,4 +355,22 @@ const PATTERN_PAIRS = {
   LUNGE:["CORE","H_PULL","H_PUSH"],  CARRY:["CORE","SQUAT"],
   CORE:["CARDIO","CARRY","SQUAT"],   PLYO:["CORE","H_PULL"],
   CARDIO:["CORE","H_PULL"],          REACTION:["PLYO","CARDIO"],
+};
+
+/* Plain-language explainers for movement patterns — shown when a tag is tapped */
+const PATTERN_EXPLAIN = {
+  SQUAT:"sit down and stand back up under control",
+  HINGE:"bend at the hips with a flat back — how you pick things up safely",
+  H_PUSH:"push away from your chest, like a push-up",
+  V_PUSH:"push straight overhead",
+  H_PULL:"row toward your body — balances all the pushing",
+  V_PULL:"pull down from overhead, like a pull-up",
+  LUNGE:"one leg forward, one back — legs working separately",
+  CARRY:"walk while holding weight — grip and posture",
+  CORE:"trunk muscles holding steady while you move",
+  PLYO:"explosive jumps and throws — trains speed",
+  CARDIO:"gets the heart rate up",
+  REACTION:"react fast to something unpredictable",
+  MOBILITY:"stretching and moving joints through full range",
+  BREATH_HOLD:"controlled breath holds that build CO2 tolerance",
 };

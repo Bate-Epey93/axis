@@ -525,12 +525,36 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .chip.m-chip { text-transform: none; letter-spacing: 0.02em; font-family: var(--sans); font-size: 0.74rem; font-weight: 600; color: var(--text); }
 .chip.m-chip.dim { color: var(--text-2); opacity: 0.75; }
 
-/* ---------- domain-tinted timer notes ---------- */
-.note-pelvic   { color: color-mix(in srgb, var(--c-pelvic) 80%, var(--text-2)); }
-.note-breath   { color: color-mix(in srgb, var(--c-breath) 72%, var(--text-2)); }
-.note-mobility { color: color-mix(in srgb, var(--c-mobility) 75%, var(--text-2)); }
-.note-mind     { color: color-mix(in srgb, var(--c-mind) 78%, var(--text-2)); }
-.note-hiit     { color: color-mix(in srgb, var(--c-hiit) 70%, var(--text-2)); }
+/* ---------- domain-tinted timer notes: full button color, slightly larger ---------- */
+.note-pelvic, .note-breath, .note-mobility, .note-mind, .note-hiit { font-size: 0.92rem; line-height: 1.6; }
+.note-pelvic   { color: var(--c-pelvic); }
+.note-breath   { color: var(--c-breath); }
+.note-mobility { color: var(--c-mobility); }
+.note-mind     { color: var(--c-mind); }
+.note-hiit     { color: var(--c-hiit); }
+
+/* ---------- flame streak mark ---------- */
+.flame { width: 13px; height: 13px; display: inline-block; vertical-align: -1.5px; }
+
+/* ---------- tinted buttons (Progress logging etc.) ---------- */
+.btn.tint {
+  background: color-mix(in srgb, var(--tint, var(--c-strength)) 16%, transparent);
+  color: var(--tint, var(--c-strength));
+  border: 1px solid color-mix(in srgb, var(--tint, var(--c-strength)) 45%, transparent);
+  font-weight: 700;
+}
+
+/* ---------- month view grid ---------- */
+.mweek { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.mweek:last-child { border-bottom: none; }
+.mweek-label { font-family: var(--mono); font-size: 0.6rem; color: var(--text-3); width: 58px; flex: none; text-transform: uppercase; letter-spacing: 0.06em; }
+.mgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; flex: 1; }
+.mcell { text-align: center; padding: 5px 0 3px; border-radius: 9px; position: relative; }
+.mcell .mnum { font-size: 0.68rem; color: var(--text-2); font-weight: 600; }
+.mcell .mdone { font-size: 0.6rem; color: var(--c-nutrition); height: 12px; font-weight: 800; }
+.mcell.today { background: var(--surface-3); box-shadow: inset 0 0 0 1.5px var(--c-strength); }
+.mcell.missed .mnum { color: var(--text-3); }
+.mcell .dot { width: 7px; height: 7px; box-shadow: none; }
 
 /* ---------- misc ---------- */
 .warn-card { border-color: color-mix(in srgb, var(--c-hiit) 50%, var(--line)); background: radial-gradient(120% 100% at 90% -20%, rgba(255,45,108,0.12), transparent 55%), linear-gradient(178deg, var(--surface-2), var(--surface) 30%); }
