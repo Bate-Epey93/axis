@@ -253,6 +253,22 @@ function render() {
   scr.scrollTop = 0;
 }
 
+/* ---------- brush motifs: one stroke per domain ---------- */
+function motifSVG(kind, color) {
+  const strokes = {
+    pelvic:   `<path d="M18 34 Q50 78 82 34"/><path d="M32 30 Q50 52 68 30" opacity="0.45"/>`,                    // pelvic bowl cradle
+    breath:   `<path d="M12 40 Q30 22 50 38 T88 36"/><path d="M20 58 Q38 44 56 56 T86 52" opacity="0.45"/>`,      // air currents
+    mobility: `<path d="M26 82 Q22 30 64 18"/><path d="M64 18 Q76 14 84 22" opacity="0.45"/>`,                    // bowing reed
+    mind:     `<circle cx="50" cy="50" r="30" stroke-dasharray="152 37" transform="rotate(-70 50 50)"/>`,         // small enso
+    strength: `<path d="M14 74 L38 30 L54 56 L68 34 L86 74"/>`,                                                   // mountain ridge
+    nutrition:`<path d="M50 82 Q24 60 34 34 Q54 26 64 40 Q72 62 50 82Z"/><path d="M50 78 Q48 56 58 40" opacity="0.5"/>`, // leaf
+  };
+  return `<svg class="motif" viewBox="0 0 100 100" aria-hidden="true" style="color:${color}">
+    <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">${strokes[kind] || strokes.mind}</g>
+  </svg>`;
+}
+const MOTIF_COLORS = { pelvic:"#C77DFF", breath:"#3ED6C4", mobility:"#6C9FFF", mind:"#E8C36A", strength:"#FF4F3F", nutrition:"#4CD97B" };
+
 /* ---------- Today ---------- */
 function renderToday() {
   const tpl = todayTemplate();
@@ -320,6 +336,7 @@ function renderToday() {
   ];
   const trackGrid = `<div class="track-grid">` + tracks.map(t => `
     <button class="track-card ${t.cls} ${tl[t.key] ? "done "+t.cls : ""}" data-act="open-track" data-track="${t.key}">
+      ${motifSVG(t.key, MOTIF_COLORS[t.key])}
       <div class="dot ${t.cls}"></div>
       <div>
         <div class="t-name">${t.name}</div>
@@ -385,6 +402,7 @@ function renderLibrary() {
     if (cat.practice) {
       body += PRACTICES.filter(p => p.cat === cat.id).map(p => `
         <button class="ex-card practice-card stripe ${p.color}" data-act="open-practice" data-open="${p.open}">
+          ${motifSVG(p.color, MOTIF_COLORS[p.color])}
           <div><div class="ex-title">${esc(p.name)}</div><div class="ex-sub">${esc(p.sub)}</div></div>
           <div class="ex-side"><span class="chip ${p.color} on">guided</span></div>
         </button>`).join("");
@@ -637,11 +655,13 @@ function renderMoreMenu() {
     <div class="hdr"><h1>More</h1></div>
     <div class="sub">Gear, recovery, and settings.</div>
     <button class="menu-card" data-act="more-nav" data-view="equip">
+      ${motifSVG("strength", MOTIF_COLORS.strength)}
       <div class="dot strength"></div>
       <div><div class="m-title">Equipment</div><div class="m-sub">Tiers, unlocks, next-buy recommendation</div></div>
       <div class="m-arrow">›</div>
     </button>
     <button class="menu-card" data-act="more-nav" data-view="recovery">
+      ${motifSVG("nutrition", MOTIF_COLORS.nutrition)}
       <div class="dot nutrition"></div>
       <div><div class="m-title">Recovery & nutrition</div><div class="m-sub">Protein, sleep, backup, settings</div></div>
       <div class="m-arrow">›</div>
@@ -1088,7 +1108,7 @@ function openHiitTimer(cfg) {
       <button class="btn ghost" style="max-width:200px;" data-act="hiit-stop">Stop</button>
     </div>
     <button class="btn hiit" id="hiit-start">Start intervals</button>
-    <div class="info-note">Work = talk-impossible effort (≳85% max HR). Recovery = easy movement, nasal breathing if you can.</div>`);
+    <div class="info-note note-hiit">Work = talk-impossible effort (≳85% max HR). Recovery = easy movement, nasal breathing if you can.</div>`);
   let int = null;
   overlayCleanup = () => clearInterval(int);
   ov.onclick = e => {
@@ -1160,7 +1180,7 @@ function openBoxBreathing() {
       <div class="round num" id="bx-total" style="color:var(--text-2); font-weight:700;">0:00</div>
       <button class="btn breath" style="max-width:240px;" id="bx-start">Begin — 4·4·4·4</button>
     </div>
-    <div class="info-note" style="text-align:center;">Inhale 4 · hold 4 · exhale 4 · hold 4. The line rides the border — one side per phase. Pre-lift focus or pre-sleep wind-down.</div>`);
+    <div class="info-note note-breath" style="text-align:center;">Inhale 4 · hold 4 · exhale 4 · hold 4. The line rides the border — one side per phase. Pre-lift focus or pre-sleep wind-down.</div>`);
   let raf = 0, running = false, t0 = 0, pausedAt = 0, lastPi = -1, lastCount = -1, marked = false;
   overlayCleanup = () => cancelAnimationFrame(raf);
   const snake = $("#box-snake");
@@ -1215,7 +1235,7 @@ function openCoherence(mode) {
       <div class="round num" id="pc-total" style="color:var(--text-2); font-weight:700;">${mins}:00 remaining</div>
       <button class="btn ${cls}" style="max-width:240px;" id="pc-start">Begin · ${rate} bpm</button>
     </div>
-    <div class="info-note" style="text-align:center;">${isMed
+    <div class="info-note ${isMed ? "note-mind" : "note-breath"}" style="text-align:center;">${isMed
       ? "One hand on the abdomen, just below the sternum. Breathe into the hand. Attention rests at the solar plexus; when it wanders, return on the exhale."
       : half + "s in through the nose · " + half + "s out. This is the cortisol-lowering, testosterone-protecting session — not a soft extra."}</div>`);
   let int = null, running = false, t0 = 0, pausedAt = 0;
@@ -1265,7 +1285,7 @@ function openBreathHold() {
       </div>
       <button class="btn ghost sm" id="bh-finish">Finish & log</button>
     </div>
-    <div class="info-note">While walking: normal exhale → hold to <b>moderate</b> air hunger (not panic) → release, nasal-only recovery ≥60 s → repeat 5–8×. Never while driving or in water.</div>`);
+    <div class="info-note note-breath">While walking: normal exhale → hold to <b>moderate</b> air hunger (not panic) → release, nasal-only recovery ≥60 s → repeat 5–8×. Never while driving or in water.</div>`);
   let int = null, holding = false, holdStart = 0, rounds = 0, best = 0;
   overlayCleanup = () => clearInterval(int);
   const clock = $("#bh-clock"), phaseEl = $("#bh-phase"), roundEl = $("#bh-round"), btn = $("#bh-btn");
@@ -1347,56 +1367,65 @@ function openPelvic() {
       <div class="round num" id="pf-round" style="color:var(--text-2); font-weight:700;">Set 1 of 3</div>
       <button class="btn pelvic" style="max-width:260px;" id="pf-start">Start — slow holds</button>
     </div>
-    <div class="info-note" style="text-align:center;">Set 1–2: slow — 5 s squeeze / 5 s full release × 10. Set 3: quick flicks — 1 s on / 1 s off × 15.</div>`);
-  let int = null;
+    <div class="info-note note-pelvic" style="text-align:center;">Set 1–2: slow — 5 s squeeze / 5 s full release × 10. Set 3: quick flicks — 1 s on / 1 s off × 15.</div>`);
+  let int = null, running = false, t0 = 0, pausedAt = 0, lastKey = "";
   overlayCleanup = () => clearInterval(int);
   $("#pf-pos").onclick = () => { S.pfPosition = posNext[pos]; save(); closeOverlay(); openPelvic(); };
-  $("#pf-start").onclick = function () {
-    this.classList.add("hidden");
-    const fill = $("#pf-fill"), phaseEl = $("#pf-phase"), clockEl = $("#pf-clock"), roundEl = $("#pf-round");
-    // schedule: set 1+2 = 10 reps × (5 s squeeze + 5 s release) = 100 s each;
-    // set 3 = 15 flicks × (1 s + 1 s) = 30 s. All derived from wall clock.
-    const SLOW = 100, TOTAL = SLOW * 2 + 30;
-    const t0 = Date.now();
-    let lastKey = "";
-    const draw = () => {
-      const el = (Date.now() - t0) / 1000;
-      if (el >= TOTAL) {
-        clearInterval(int);
-        phaseEl.textContent = "Complete"; clockEl.textContent = "✓"; fill.style.width = "0%";
-        roundEl.textContent = "3 sets done";
-        markTrack("pelvic");
-        beepDone(); toast("Pelvic floor logged · 🔥 " + trackStreak("pelvic") + "d");
-        return;
-      }
-      let set, rep, within, dur, maxRep;
-      if (el < SLOW * 2) {
-        set = el < SLOW ? 1 : 2;
-        const e = el % SLOW;
-        rep = Math.floor(e / 10) + 1; within = e % 10; dur = 5; maxRep = 10;
-      } else {
-        set = 3;
-        const e = el - SLOW * 2;
-        rep = Math.floor(e / 2) + 1; within = e % 2; dur = 1; maxRep = 15;
-      }
-      const squeezing = within < dur;
-      const key = set + "-" + rep + "-" + squeezing;
-      if (key !== lastKey) {
-        lastKey = key;
-        fill.style.transitionDuration = dur + "s";
-        fill.style.width = squeezing ? "100%" : "0%";
-        phaseEl.textContent = squeezing ? "SQUEEZE" : "RELEASE";
-        phaseEl.style.color = squeezing ? "var(--c-pelvic)" : "var(--text-2)";
-        clockEl.textContent = rep;
-        roundEl.textContent = `Set ${set} of 3 · ${set === 3 ? "quick flicks" : "slow holds"} · rep ${rep}/${maxRep}`;
-        if (set === 3) { if (squeezing) beep(1000, 0.06, 0.18); }
-        else if (squeezing && rep === 1 && set === 2) beepHi();
-        else beepLo();
-      }
-    };
-    draw();
-    clearInterval(int);
-    int = setInterval(draw, 250);
+  const fill = $("#pf-fill"), phaseEl = $("#pf-phase"), clockEl = $("#pf-clock"), roundEl = $("#pf-round");
+  const startBtn = $("#pf-start");
+  // schedule: set 1+2 = 10 reps × (5 s squeeze + 5 s release) = 100 s each;
+  // set 3 = 15 flicks × (1 s + 1 s) = 30 s. All derived from wall clock.
+  const SLOW = 100, TOTAL = SLOW * 2 + 30;
+  const draw = () => {
+    const el = (Date.now() - t0) / 1000;
+    if (el >= TOTAL) {
+      clearInterval(int); running = false; t0 = 0; pausedAt = 0; lastKey = "";
+      phaseEl.textContent = "Complete"; clockEl.textContent = "✓"; fill.style.width = "0%";
+      roundEl.textContent = "3 sets done";
+      startBtn.textContent = "Again";
+      markTrack("pelvic");
+      beepDone(); toast("Pelvic floor logged · 🔥 " + trackStreak("pelvic") + "d");
+      return;
+    }
+    let set, rep, within, dur, maxRep;
+    if (el < SLOW * 2) {
+      set = el < SLOW ? 1 : 2;
+      const e = el % SLOW;
+      rep = Math.floor(e / 10) + 1; within = e % 10; dur = 5; maxRep = 10;
+    } else {
+      set = 3;
+      const e = el - SLOW * 2;
+      rep = Math.floor(e / 2) + 1; within = e % 2; dur = 1; maxRep = 15;
+    }
+    const squeezing = within < dur;
+    const key = set + "-" + rep + "-" + squeezing;
+    if (key !== lastKey) {
+      lastKey = key;
+      fill.style.transitionDuration = dur + "s";
+      fill.style.width = squeezing ? "100%" : "0%";
+      phaseEl.textContent = squeezing ? "SQUEEZE" : "RELEASE";
+      phaseEl.style.color = squeezing ? "var(--c-pelvic)" : "var(--text-2)";
+      clockEl.textContent = rep;
+      roundEl.textContent = `Set ${set} of 3 · ${set === 3 ? "quick flicks" : "slow holds"} · rep ${rep}/${maxRep}`;
+      if (set === 3) { if (squeezing) beep(1000, 0.06, 0.18); }
+      else if (squeezing && rep === 1 && set === 2) beepHi();
+      else beepLo();
+    }
+  };
+  startBtn.onclick = () => {
+    if (running) {
+      // pause: freeze the clock and the fill bar where they are
+      running = false; clearInterval(int); pausedAt = Date.now();
+      const w = getComputedStyle(fill).width;
+      fill.style.transitionDuration = "0s"; fill.style.width = w;
+      phaseEl.textContent = "Paused"; phaseEl.style.color = "var(--text-3)";
+      startBtn.textContent = "Resume";
+      return;
+    }
+    running = true; startBtn.textContent = "Pause";
+    if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
+    pausedAt = 0; lastKey = "";
+    clearInterval(int); int = setInterval(draw, 250); draw();
   };
 }
 
@@ -1424,37 +1453,43 @@ function openMobilityPlayer(mode) {
       <div class="round num" id="mb-prog" style="color:var(--text-3);">1 / ${flow.moves.length}</div>
       <button class="btn mobility" style="max-width:240px;" id="mb-start">Start flow</button>
     </div>`);
-  let int = null;
+  let int = null, running = false, t0 = 0, pausedAt = 0, lastMi = -1, lastLeft = -1;
   overlayCleanup = () => clearInterval(int);
   ov.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { clearInterval(int); closeOverlay(); openMobilityPlayer(b.dataset.mode); });
-  $("#mb-start").onclick = function () {
-    this.classList.add("hidden");
-    const bounds = []; let total = 0;
-    flow.moves.forEach(m => { total += m.secs; bounds.push(total); });
-    const t0 = Date.now();
-    let lastMi = -1, lastLeft = -1;
-    const draw = () => {
-      const el = (Date.now() - t0) / 1000;
-      if (el >= total) {
-        clearInterval(int);
-        $("#mb-name").textContent = "Flow complete ✓"; $("#mb-clock").textContent = "—"; $("#mb-cue").textContent = "";
-        markTrack("mobility");
-        beepDone(); toast("Mobility logged · 🔥 " + trackStreak("mobility") + "d");
-        return;
-      }
-      let mi = 0; while (el >= bounds[mi]) mi++;
-      const left = Math.ceil(bounds[mi] - el);
-      if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; }
-      if (left <= 3 && left !== lastLeft) beepLo();
-      lastLeft = left;
-      $("#mb-name").textContent = flow.moves[mi].name;
-      $("#mb-cue").textContent = flow.moves[mi].cue;
-      $("#mb-clock").textContent = fmtClock(left);
-      $("#mb-prog").textContent = (mi+1) + " / " + flow.moves.length;
-    };
-    draw();
-    clearInterval(int);
-    int = setInterval(draw, 250);
+  const bounds = []; let total = 0;
+  flow.moves.forEach(m => { total += m.secs; bounds.push(total); });
+  const startBtn = $("#mb-start");
+  const draw = () => {
+    const el = (Date.now() - t0) / 1000;
+    if (el >= total) {
+      clearInterval(int); running = false; t0 = 0; pausedAt = 0; lastMi = -1;
+      $("#mb-name").textContent = "Flow complete ✓"; $("#mb-clock").textContent = "—"; $("#mb-cue").textContent = "";
+      startBtn.textContent = "Again";
+      markTrack("mobility");
+      beepDone(); toast("Mobility logged · 🔥 " + trackStreak("mobility") + "d");
+      return;
+    }
+    let mi = 0; while (el >= bounds[mi]) mi++;
+    const left = Math.ceil(bounds[mi] - el);
+    if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; }
+    if (left <= 3 && left !== lastLeft) beepLo();
+    lastLeft = left;
+    $("#mb-name").textContent = flow.moves[mi].name;
+    $("#mb-cue").textContent = flow.moves[mi].cue;
+    $("#mb-clock").textContent = fmtClock(left);
+    $("#mb-prog").textContent = (mi+1) + " / " + flow.moves.length;
+  };
+  startBtn.onclick = () => {
+    if (running) {
+      running = false; clearInterval(int); pausedAt = Date.now();
+      $("#mb-name").textContent = "Paused — " + flow.moves[Math.max(0, lastMi)].name;
+      startBtn.textContent = "Resume";
+      return;
+    }
+    running = true; startBtn.textContent = "Pause";
+    if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
+    pausedAt = 0;
+    clearInterval(int); int = setInterval(draw, 250); draw();
   };
 }
 

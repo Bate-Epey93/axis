@@ -458,6 +458,22 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 }
 #toast.show { opacity: 1; }
 
+/* ---------- brush motifs ---------- */
+.motif {
+  position: absolute; top: -14px; right: -12px; width: 86px; height: 86px;
+  opacity: 0.38; pointer-events: none;
+}
+.track-card .motif { top: 40px; right: -18px; opacity: 0.34; } /* keep clear of the ✓ ring */
+.ex-card, .menu-card { overflow: hidden; }
+.ex-card .motif, .menu-card .motif { top: -20px; right: -16px; width: 80px; height: 80px; opacity: 0.28; }
+
+/* ---------- domain-tinted timer notes ---------- */
+.note-pelvic   { color: color-mix(in srgb, var(--c-pelvic) 80%, var(--text-2)); }
+.note-breath   { color: color-mix(in srgb, var(--c-breath) 72%, var(--text-2)); }
+.note-mobility { color: color-mix(in srgb, var(--c-mobility) 75%, var(--text-2)); }
+.note-mind     { color: color-mix(in srgb, var(--c-mind) 78%, var(--text-2)); }
+.note-hiit     { color: color-mix(in srgb, var(--c-hiit) 70%, var(--text-2)); }
+
 /* ---------- misc ---------- */
 .warn-card { border-color: color-mix(in srgb, var(--c-hiit) 50%, var(--line)); background: radial-gradient(120% 100% at 90% -20%, rgba(255,45,108,0.12), transparent 55%), linear-gradient(178deg, var(--surface-2), var(--surface) 30%); }
 .info-note { font-size: 0.8rem; color: var(--text-2); line-height: 1.55; margin-top: 8px; }
