@@ -372,13 +372,13 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .pacer-circle.exhale { transform: scale(0.7); }
 @media (prefers-reduced-motion: reduce) { .pacer-circle { transition: none; } }
 
-/* box breathing */
+/* box breathing — a phase-colored line rides the border path */
 .box-wrap { position: relative; width: 240px; height: 240px; }
-.box-outline { position: absolute; inset: 0; border: 2px solid var(--line); border-radius: 24px; }
-.box-dot {
-  position: absolute; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--c-breath); box-shadow: 0 0 20px var(--c-breath);
-  top: -8px; left: -8px;
+.box-track { fill: none; stroke: var(--line); stroke-width: 3; }
+.box-snake {
+  fill: none; stroke: var(--c-breath); stroke-width: 6; stroke-linecap: round;
+  transition: stroke 0.5s ease;
+  filter: drop-shadow(0 0 12px var(--c-breath));
 }
 .box-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
 .box-label .bphase { font-family: var(--mono); font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.28em; color: var(--c-breath); }
@@ -473,3 +473,34 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .spacer { flex: 1; }
 a { color: var(--c-mobility); }
 :focus-visible { outline: 2px solid var(--c-mobility); outline-offset: 2px; }
+
+/* ---------- glass gloss (Tahoe) ----------
+   Static: inner top hairline catches the light.
+   Dynamic: a specular highlight follows the pointer (--gx/--gy set from JS)
+   on cards, tabs, and buttons while you move over or press them. */
+.card, .hero, .track-card, .ex-card, .menu-card, .slot-card, .tier-card {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), inset 0 0 0 0.5px rgba(255,255,255,0.02);
+}
+.card, .hero, .track-card, .ex-card, .menu-card, .slot-card, .tier-card,
+.opt-row, .tab, .btn, .cat-chip, .gym-toggle {
+  position: relative;
+}
+.card::before, .hero::before, .track-card::before, .ex-card::before, .menu-card::before,
+.slot-card::before, .tier-card::before, .opt-row::before, .tab::before, .btn::before,
+.cat-chip::before, .gym-toggle::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
+  background: radial-gradient(190px circle at var(--gx, 50%) var(--gy, 35%),
+    rgba(255,255,255,0.11), rgba(255,255,255,0.03) 45%, transparent 68%);
+  opacity: 0; transition: opacity 0.3s ease;
+}
+.glossing::before { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .card::before, .hero::before, .track-card::before, .ex-card::before, .menu-card::before,
+  .slot-card::before, .tier-card::before, .opt-row::before, .tab::before, .btn::before,
+  .cat-chip::before, .gym-toggle::before { transition: none; }
+}
+/* deeper frosted glass on floating chrome */
+#tabbar { background: rgba(15,15,19,0.82); backdrop-filter: blur(28px) saturate(170%); -webkit-backdrop-filter: blur(28px) saturate(170%); }
+#restbar { backdrop-filter: blur(24px) saturate(170%); -webkit-backdrop-filter: blur(24px) saturate(170%); }
+.tab.active { background: rgba(255,255,255,0.06); box-shadow: inset 0 1px 0 rgba(255,255,255,0.09); }
+.x-btn { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }

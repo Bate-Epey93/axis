@@ -1151,44 +1151,52 @@ function openBoxBreathing() {
   const ov = overlayShell("Box breathing", "breath", `
     <div class="pacer-wrap">
       <div class="box-wrap">
-        <div class="box-outline"></div>
-        <div class="box-dot" id="box-dot"></div>
+        <svg viewBox="0 0 240 240" style="position:absolute; inset:0; overflow:visible;" aria-hidden="true">
+          <rect x="6" y="6" width="228" height="228" rx="32" class="box-track"/>
+          <rect x="6" y="6" width="228" height="228" rx="32" class="box-snake" id="box-snake"/>
+        </svg>
         <div class="box-label"><div class="bphase" id="bx-phase">Ready</div><div class="bcount num" id="bx-count">4</div></div>
       </div>
       <div class="round num" id="bx-total" style="color:var(--text-2); font-weight:700;">0:00</div>
       <button class="btn breath" style="max-width:240px;" id="bx-start">Begin — 4·4·4·4</button>
     </div>
-    <div class="info-note" style="text-align:center;">Inhale 4 · hold 4 · exhale 4 · hold 4. Pre-lift focus or pre-sleep wind-down. 2–5 minutes.</div>`);
-  let int = null, running = false, t0 = 0, pausedAt = 0, lastPi = -1, marked = false;
-  overlayCleanup = () => clearInterval(int);
-  const SIDE = 240 - 18; // travel px
+    <div class="info-note" style="text-align:center;">Inhale 4 · hold 4 · exhale 4 · hold 4. The line rides the border — one side per phase. Pre-lift focus or pre-sleep wind-down.</div>`);
+  let raf = 0, running = false, t0 = 0, pausedAt = 0, lastPi = -1, lastCount = -1, marked = false;
+  overlayCleanup = () => cancelAnimationFrame(raf);
+  const snake = $("#box-snake");
+  const TOTAL_LEN = snake.getTotalLength();
+  const SEG = TOTAL_LEN * 0.24;
+  snake.style.strokeDasharray = `${SEG} ${TOTAL_LEN - SEG}`;
+  snake.style.strokeDashoffset = "0";
+  const PHASES = ["Inhale", "Hold", "Exhale", "Hold"];
+  const COLORS = ["#3ED6C4", "#E8C36A", "#6C9FFF", "#E8C36A"]; // inhale teal · hold gold · exhale blue
+  const tick = () => {
+    if (!running) return;
+    const el = (Date.now() - t0) / 1000;
+    const cyc = el % 16;
+    const pi = Math.floor(cyc / 4);
+    // the line slides fluidly along the border path; colors switch per phase
+    snake.style.strokeDashoffset = String(-(cyc / 16) * TOTAL_LEN);
+    if (pi !== lastPi) {
+      lastPi = pi;
+      const c = COLORS[pi];
+      snake.style.stroke = c;
+      snake.style.filter = `drop-shadow(0 0 12px ${c})`;
+      $("#bx-phase").textContent = PHASES[pi];
+      $("#bx-phase").style.color = c;
+      if (el > 0.5) beepLo();
+    }
+    const count = 4 - Math.floor(cyc % 4);
+    if (count !== lastCount) { lastCount = count; $("#bx-count").textContent = count; $("#bx-total").textContent = fmtClock(Math.floor(el)); }
+    if (el >= 120 && !marked) { marked = true; markTrack("breath", { breathType:"box" }); }
+    raf = requestAnimationFrame(tick);
+  };
   $("#bx-start").onclick = () => {
-    if (running) { clearInterval(int); running = false; pausedAt = Date.now(); $("#bx-start").textContent = "Resume"; return; }
+    if (running) { running = false; cancelAnimationFrame(raf); pausedAt = Date.now(); $("#bx-start").textContent = "Resume"; return; }
     running = true; $("#bx-start").textContent = "Pause";
     if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
     pausedAt = 0;
-    const phases = ["Inhale","Hold","Exhale","Hold"];
-    const dot = $("#box-dot");
-    const place = (pi, frac) => {
-      // dot travels around square edges: top→right→bottom→left
-      let x=0, y=0;
-      if (pi===0) { x = frac*SIDE; y = 0; }
-      else if (pi===1) { x = SIDE; y = frac*SIDE; }
-      else if (pi===2) { x = SIDE - frac*SIDE; y = SIDE; }
-      else { x = 0; y = SIDE - frac*SIDE; }
-      dot.style.transform = `translate(${x}px, ${y}px)`;
-    };
-    clearInterval(int);
-    int = setInterval(() => {
-      const total = (Date.now() - t0) / 1000;
-      const cyc = total % 16, pi = Math.floor(cyc / 4), within = cyc % 4;
-      if (pi !== lastPi) { if (lastPi >= 0) beepLo(); lastPi = pi; }
-      $("#bx-phase").textContent = phases[pi];
-      $("#bx-count").textContent = 4 - Math.floor(within);
-      $("#bx-total").textContent = fmtClock(Math.floor(total));
-      place(pi, within / 4);
-      if (total >= 120 && !marked) { marked = true; markTrack("breath", { breathType:"box" }); }
-    }, 100);
+    raf = requestAnimationFrame(tick);
   };
 }
 
@@ -1590,6 +1598,26 @@ $("#screen").addEventListener("click", e => {
     });
   }
 });
+
+/* ---------- glass gloss: specular highlight tracks the pointer ---------- */
+const GLOSS_SEL = ".card,.hero,.track-card,.ex-card,.menu-card,.slot-card,.tier-card,.opt-row,.tab,.btn,.cat-chip,.gym-toggle";
+let glossEl = null;
+function glossMove(e) {
+  const el = e.target && e.target.closest ? e.target.closest(GLOSS_SEL) : null;
+  if (glossEl && glossEl !== el) { glossEl.classList.remove("glossing"); glossEl = null; }
+  if (!el) return;
+  glossEl = el;
+  const r = el.getBoundingClientRect();
+  el.style.setProperty("--gx", ((e.clientX - r.left) / r.width * 100).toFixed(1) + "%");
+  el.style.setProperty("--gy", ((e.clientY - r.top) / r.height * 100).toFixed(1) + "%");
+  el.classList.add("glossing");
+}
+document.addEventListener("pointermove", glossMove, { passive: true });
+document.addEventListener("pointerdown", glossMove, { passive: true });
+document.addEventListener("pointerup", () => {
+  // on touch there's no hover — let the press highlight linger briefly, then fade
+  if (glossEl) { const el = glossEl; glossEl = null; setTimeout(() => el.classList.remove("glossing"), 420); }
+}, { passive: true });
 
 /* ---------- service worker ---------- */
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
