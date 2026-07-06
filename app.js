@@ -1238,14 +1238,24 @@ function renderOnboarding() {
           stroke-linecap="round" stroke-dasharray="30 209" transform="rotate(-80 50 50)" opacity="0.35"/>
         <circle cx="50" cy="50" r="7" fill="currentColor"/>
       </svg>
-      <p style="color:var(--text-2); font-size:1.05rem; line-height:1.6; max-width:32ch;">A personal training companion — strength, breathing, mobility, and recovery on one axis.</p>
-      <p style="color:var(--text-3); font-size:0.87rem; line-height:1.6; max-width:36ch;">For one person training six days a week with whatever's on hand — a gym, a single band, or nothing. The focus: strong and lean, breathing better, moving younger.</p>
+      <div style="display:flex; flex-direction:column; gap:14px; max-width:38ch; text-align:left;">
+        <div><span class="sec" style="margin:0 0 3px; display:block; color:var(--c-strength);">Who</span>
+        <p style="color:var(--text-2); font-size:0.92rem; line-height:1.6;">Men in their 30s who used to be fitter than they are — training inconsistently, carrying some waist, and starting to feel it.</p></div>
+        <div><span class="sec" style="margin:0 0 3px; display:block; color:var(--c-breath);">What</span>
+        <p style="color:var(--text-2); font-size:0.92rem; line-height:1.6;">One 6-day system for the whole machine: strength and a lean physique, stamina — in training and in bed — breath control, mobility, reaction speed, and the recovery that keeps testosterone up.</p></div>
+        <div><span class="sec" style="margin:0 0 3px; display:block; color:var(--c-mind);">How</span>
+        <p style="color:var(--text-2); font-size:0.92rem; line-height:1.6;">The app adapts every session to the equipment you have that day, remembers your numbers and progresses them for you, and makes the small daily work — pelvic floor, breath, mobility, meditation — one tap each.</p></div>
+      </div>
       <button class="btn primary" style="max-width:280px;" data-act="ob-next">Set my baselines</button>
     </div>`;
   if (obStep === 1) {
     return `
     <div class="hdr" style="margin-top:20px;"><h1>Baselines</h1></div>
-    <div class="sub">Four numbers, measured once, honestly. Everything else is measured against these. Skip any you can't do right now.</div>
+    <div class="sub">Four numbers, measured once, honestly. Skip any you can't do right now.</div>
+    <div class="card stripe breath">
+      <div class="meta"><b style="color:var(--text);">What these are for:</b> Axis uses your baselines to size your first targets, decide when to progress you, and draw honest trend lines — so in 8–12 weeks you can see change, not guess at it.</div>
+      <div class="meta" style="margin-top:6px;"><b style="color:var(--text);">Where they live:</b> on this device only. No account, no cloud, nothing leaves your phone. You can export a backup file anytime from Recovery.</div>
+    </div>
     ${BASELINES.map(b => `
       <div class="card">
         <h3>${b.label} <span style="color:var(--text-3); font-weight:500; font-size:0.8rem;">(${b.unit})</span></h3>
@@ -1505,14 +1515,24 @@ function openLoadSheet(si, xi) {
 function persistSession(completed) {
   const entries = session.slots.filter(s => s.ex).map(s => ({ exId: s.ex.id, sets: s.sets }));
   let log = S.workoutLogs.find(l => l.date === todayISO() && l.templateId === session.templateId);
-  if (!log) { log = { date: todayISO(), templateId: session.templateId, location: session.location, entries: [], completed: false }; S.workoutLogs.push(log); }
+  if (!log) { log = { date: todayISO(), templateId: session.templateId, location: session.location, entries: [], completed: false, startedAt: Date.now() }; S.workoutLogs.push(log); }
+  if (!log.startedAt) log.startedAt = Date.now();
   log.entries = entries; log.location = session.location;
+  log.restSecs = Math.round(session.restAccum || 0);
   if (completed) log.completed = true;
   save();
+  return log;
 }
+
+/* volume score for session-to-session comparison: reps × load (bodyweight counts as 1) */
+function sessionScore(log) {
+  return (log.entries || []).flatMap(e => e.sets).filter(s => s.done)
+    .reduce((a, s) => a + (s.reps || 1) * (parseFloat(s.load) || 1), 0);
+}
+
 function finishSession() {
-  persistSession(true);
-  stopRestTimer();
+  stopRestTimer(); // fold any running rest into the tally before persisting
+  const log = persistSession(true);
   // auto-log key lifts as metrics when at the gym with numeric loads
   const liftMap = { SQUAT:"LIFT_SQUAT", HINGE:"LIFT_HINGE", H_PUSH:"LIFT_PUSH", V_PULL:"LIFT_PULL" };
   session.slots.forEach(s => {
@@ -1528,15 +1548,42 @@ function finishSession() {
   });
   save();
   beepDone();
+  // ---- session summary ----
+  const allSets = session.slots.flatMap(s => s.sets);
+  const doneSets = allSets.filter(s => s.done).length;
+  const pct = allSets.length ? Math.round(doneSets / allSets.length * 100) : 0;
+  const durMin = log.startedAt ? Math.max(1, Math.round((Date.now() - log.startedAt) / 60000)) : null;
+  const restMin = Math.round((log.restSecs || 0) / 60 * 10) / 10;
+  const prev = [...S.workoutLogs].reverse().find(l => l.templateId === session.templateId && l.completed && l.date < todayISO());
+  let trendRow = `<div class="eq-row"><div class="eq-name">vs last time</div><div class="eq-unlocks">First one logged — this is the baseline</div></div>`;
+  if (prev) {
+    const cur = sessionScore(log), old = sessionScore(prev);
+    const d = old ? Math.round((cur - old) / old * 100) : 0;
+    const arrow = d > 2 ? ["↑", "var(--c-nutrition)", `+${d}% volume — trending up`] :
+                  d < -2 ? ["↓", "var(--c-hiit)", `${d}% volume — lighter day, that's fine`] :
+                  ["≈", "var(--text-2)", "level with last time — consistency wins"];
+    trendRow = `<div class="eq-row"><div class="eq-name">vs last time (${prev.date})</div><div class="eq-unlocks" style="color:${arrow[1]}; font-weight:700;">${arrow[0]} ${arrow[2]}</div></div>`;
+  }
+  const tplLabel = session.tpl ? session.tpl.label : "Session";
   closeOverlay();
   render();
-  toast("Session logged. 🔥 " + workoutStreak() + "-day streak");
+  showSheet(`
+    <div style="text-align:center; margin-bottom:6px;">${flameSVG("var(--c-strength)")}</div>
+    <h3 style="text-align:center;">${esc(tplLabel)} — done</h3>
+    <div class="meta" style="text-align:center; margin-bottom:14px;">${flameSVG("var(--c-mind)")} ${workoutStreak()}-day streak</div>
+    ${durMin ? `<div class="eq-row"><div class="eq-name">Time training</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${durMin} min</div></div>` : ""}
+    <div class="eq-row"><div class="eq-name">Time resting</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${restMin} min</div></div>
+    <div class="eq-row"><div class="eq-name">Completed</div><div class="eq-unlocks num" style="font-size:1rem; color:${pct >= 100 ? "var(--c-nutrition)" : "var(--text)"};">${doneSets}/${allSets.length} sets · ${pct}%</div></div>
+    ${trendRow}
+    <button class="btn primary" style="margin-top:14px;" id="sum-done">Done</button>
+  `, sheet => { sheet.querySelector("#sum-done").onclick = closeSheet; });
 }
 
 /* ---------- rest timer ---------- */
-let restInt = null;
+let restInt = null, restStartedAt = 0;
 function startRestTimer(secs, isPower) {
   stopRestTimer();
+  restStartedAt = Date.now();
   const bar = $("#restbar");
   bar.classList.remove("hidden");
   bar.classList.toggle("power", !!isPower);
@@ -1554,7 +1601,13 @@ function startRestTimer(secs, isPower) {
   $("#restbar [data-act='skip-rest']").onclick = () => stopRestTimer();
   $("#restbar [data-act='add-rest']").onclick = () => { end += 30000; total += 30; draw(); };
 }
-function stopRestTimer() { clearInterval(restInt); restInt = null; $("#restbar").classList.add("hidden"); }
+function stopRestTimer() {
+  if (restStartedAt && session) {
+    session.restAccum = (session.restAccum || 0) + (Date.now() - restStartedAt) / 1000;
+  }
+  restStartedAt = 0;
+  clearInterval(restInt); restInt = null; $("#restbar").classList.add("hidden");
+}
 
 /* =====================================================================
    TIMERS & TRACK FLOWS
