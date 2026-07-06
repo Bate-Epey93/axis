@@ -1,5 +1,5 @@
 /* Axis service worker — network-first with cache fallback, offline-safe */
-const CACHE = "axis-v3";
+const CACHE = "axis-v4";
 const ASSETS = [
   "./",
   "./index.html",

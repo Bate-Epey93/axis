@@ -234,15 +234,21 @@ function addMetric(type, value) {
    RENDERING
 ===================================================================== */
 let currentTab = "today";
+let moreView = "menu";   // menu | equip | recovery
+let libCat = "all";
 function render() {
   const scr = $("#screen");
   if (!S.onboarded) { scr.innerHTML = renderOnboarding(); bindOnboarding(); $("#tabbar").classList.add("hidden"); return; }
   $("#tabbar").classList.remove("hidden");
   if (currentTab === "today") scr.innerHTML = renderToday();
+  else if (currentTab === "library") scr.innerHTML = renderLibrary();
   else if (currentTab === "progress") { scr.innerHTML = renderProgress(); drawAllCharts(); }
   else if (currentTab === "plan") scr.innerHTML = renderPlan();
-  else if (currentTab === "equip") scr.innerHTML = renderEquipment();
-  else if (currentTab === "more") scr.innerHTML = renderMore();
+  else if (currentTab === "more") {
+    if (moreView === "equip") scr.innerHTML = renderEquipment();
+    else if (moreView === "recovery") scr.innerHTML = renderRecovery();
+    else scr.innerHTML = renderMoreMenu();
+  }
   $$("#tabbar .tab").forEach(t => t.classList.toggle("active", t.dataset.tab === currentTab));
   scr.scrollTop = 0;
 }
@@ -253,32 +259,37 @@ function renderToday() {
   const week = programWeek();
   const dateStr = new Date().toLocaleDateString(undefined, { weekday:"long", month:"short", day:"numeric" });
   const tl = S.trackLogs[todayISO()] || {};
-  const doneToday = S.workoutLogs.some(l => l.date === todayISO() && l.completed);
+  const doneToday = S.workoutLogs.some(l => l.date === todayISO() && l.completed && l.templateId === tpl.id);
   const consec = consecutiveTrainingDays();
   const overtraining = consec >= 6 && tpl.type !== "REST";
   const deloadDue = !isDeload() && weeksSinceDeload() >= 5;
 
+  const ensoColor = { strength:"#FF4F3F", hiit:"#FF2D6C", breath:"#3ED6C4", mobility:"#6C9FFF", rest:"#8E8E93" }[tpl.color] || "#FF4F3F";
+  const enso = `
+    <svg class="enso" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="38" fill="none" stroke="${ensoColor}" stroke-width="5"
+        stroke-linecap="round" stroke-dasharray="200 39" transform="rotate(-64 50 50)" opacity="0.85"/>
+      <circle cx="50" cy="50" r="38" fill="none" stroke="${ensoColor}" stroke-width="2"
+        stroke-linecap="round" stroke-dasharray="30 209" transform="rotate(-80 50 50)" opacity="0.35"/>
+    </svg>`;
   let sessionCard;
   if (tpl.type === "REST") {
     sessionCard = `
-      <div class="card stripe rest">
-        <div class="card-row"><div class="dot rest"></div><div>
-          <h3>Rest day</h3><div class="meta">${esc(tpl.desc)}</div>
-        </div></div>
-        <div class="info-note">Recovery is when adaptation happens. Daily tracks below still count today.</div>
+      <div class="hero rest">
+        ${enso}
+        <div class="eyebrow">Day ${programDay()+1} · Rest</div>
+        <h2 class="hero-title">Rest day</h2>
+        <div class="meta">${esc(tpl.desc)} Daily tracks below still count today.</div>
       </div>`;
   } else {
     sessionCard = `
-      <div class="card stripe ${tpl.color} tappable" data-act="open-session">
-        <div class="card-row">
-          <div style="flex:1">
-            <div class="chip ${tpl.color} on">${tpl.type}${isDeload() ? " · DELOAD −40%" : ""}${isRampWeeks() ? " · WEEK "+week+" RAMP" : ""}</div>
-            <h3 style="margin-top:8px; font-size:1.3rem;">${esc(tpl.label)}</h3>
-            <div class="meta">${esc(tpl.desc)}</div>
-            <div class="meta num" style="margin-top:6px;">${tpl.slots.length} movement slots · fills with what you have today</div>
-          </div>
-        </div>
-        <button class="btn ${tpl.color}" style="margin-top:14px;" data-act="open-session">${doneToday ? "✓ Completed — reopen" : "Start session"}</button>
+      <div class="hero ${tpl.color}">
+        ${enso}
+        <div class="eyebrow">Day ${programDay()+1} · ${tpl.type}${isDeload() ? " · deload −40%" : ""}${isRampWeeks() ? " · week "+week+" ramp" : ""}</div>
+        <h2 class="hero-title">${esc(tpl.label)}</h2>
+        <div class="meta">${esc(tpl.desc)}</div>
+        <div class="meta num" style="margin-top:6px;">${tpl.slots.length} movement slots · fills with what you have today</div>
+        <button class="btn ${tpl.color}" data-act="open-session">${doneToday ? "✓ Completed — reopen" : "Start session"}</button>
       </div>`;
   }
 
@@ -346,6 +357,119 @@ function renderToday() {
       <button class="btn ghost sm" data-act="open-box">Box breath</button>
       <button class="btn ghost sm" data-act="open-bolt">BOLT test</button>
     </div>`;
+}
+
+/* ---------- Library ---------- */
+function libLastDone(exId) {
+  for (let i = S.workoutLogs.length - 1; i >= 0; i--) {
+    const log = S.workoutLogs[i];
+    const ent = (log.entries || []).find(e => e.exId === exId && e.sets.some(s => s.done));
+    if (ent) {
+      const done = ent.sets.filter(s => s.done);
+      const loads = done.map(s => s.load).filter(Boolean);
+      return { date: log.date, txt: done.length + "×" + (done[0].reps ?? "—") + (loads.length ? " · " + loads[loads.length - 1] : "") };
+    }
+  }
+  return null;
+}
+function renderLibrary() {
+  const owned = S.equipment.filter(e => e !== "gym");
+  const cats = [{ id:"all", label:"All" }].concat(CATEGORIES);
+  const chipRow = `<div class="cat-row">` + cats.map(c =>
+    `<button class="cat-chip ${libCat === c.id ? "on" : ""}" data-act="lib-cat" data-cat="${c.id}">${esc(c.label)}</button>`).join("") + `</div>`;
+
+  const activeCats = libCat === "all" ? CATEGORIES : CATEGORIES.filter(c => c.id === libCat);
+  let body = "";
+  for (const cat of activeCats) {
+    body += `<div class="sec">${esc(cat.label)}</div>`;
+    if (cat.practice) {
+      body += PRACTICES.filter(p => p.cat === cat.id).map(p => `
+        <button class="ex-card practice-card stripe ${p.color}" data-act="open-practice" data-open="${p.open}">
+          <div><div class="ex-title">${esc(p.name)}</div><div class="ex-sub">${esc(p.sub)}</div></div>
+          <div class="ex-side"><span class="chip ${p.color} on">guided</span></div>
+        </button>`).join("");
+      continue;
+    }
+    const exs = EXERCISES.filter(e => cat.patterns.includes(e.pattern)).sort((a, b) => b.priority - a.priority);
+    body += exs.map(ex => {
+      const missing = ex.req.filter(r => r !== "gym" && !owned.includes(r));
+      const gymOnly = ex.req.includes("gym");
+      const locked = missing.length > 0;
+      const last = libLastDone(ex.id);
+      const eqTxt = ex.req.length ? ex.req.map(r => (EQUIPMENT.find(q => q.id === r) || { name: r }).name).join(" · ") : "Bodyweight";
+      return `
+        <button class="ex-card ${locked ? "locked" : ""}" data-act="ex-detail" data-ex="${ex.id}">
+          <div>
+            <div class="ex-title">${esc(ex.name)}</div>
+            <div class="ex-sub">${esc(eqTxt)}${locked ? " · not owned yet" : gymOnly ? " · gym day" : ""}</div>
+          </div>
+          <div class="ex-side">
+            <span class="tag ${ex.pattern}">${esc(PATTERN_LABEL[ex.pattern])}</span>
+            ${last ? `<div class="ex-last num" style="margin-top:5px;">${esc(last.txt)}</div>` : ""}
+          </div>
+        </button>`;
+    }).join("");
+  }
+  return `
+    <div class="hdr"><h1>Library</h1></div>
+    <div class="sub">Every movement by name. Tap one for its form cue, ladder, and a one-off session.</div>
+    ${chipRow}${body}`;
+}
+
+function openExerciseSheet(exId) {
+  const ex = EXERCISES.find(e => e.id === exId);
+  if (!ex) return;
+  const owned = S.equipment.filter(e => e !== "gym");
+  const missing = ex.req.filter(r => r !== "gym" && !owned.includes(r));
+  const gymOnly = ex.req.includes("gym");
+  const last = libLastDone(ex.id);
+  const eqTxt = ex.req.length ? ex.req.map(r => (EQUIPMENT.find(q => q.id === r) || { name: r }).name).join(", ") : "Bodyweight — always available";
+  showSheet(`
+    <span class="tag ${ex.pattern}">${esc(PATTERN_LABEL[ex.pattern])}</span>
+    <h3 style="margin-top:12px;">${esc(ex.name)}</h3>
+    ${ex.cue ? `<div class="meta" style="margin-bottom:14px; line-height:1.55;">${esc(ex.cue)}</div>` : ""}
+    <div class="eq-row" style="border-top:1px solid var(--line);"><div><div class="eq-name">Needs</div><div class="eq-unlocks">${esc(eqTxt)}</div></div></div>
+    ${ex.ladder ? `<div class="eq-row"><div><div class="eq-name">Progression ladder</div><div class="eq-unlocks">${ex.ladder.map(esc).join(" → ")}</div></div></div>` : ""}
+    ${last ? `<div class="eq-row"><div><div class="eq-name">Last done</div><div class="eq-unlocks num">${esc(last.txt)} · ${last.date}</div></div></div>` : ""}
+    <div style="height:10px;"></div>
+    ${missing.length
+      ? `<button class="btn ghost">Locked — needs ${missing.map(m => esc((EQUIPMENT.find(q => q.id === m) || { name: m }).name)).join(", ")}</button>`
+      : `<button class="btn strength" data-start-single="${ex.id}">Do this now${gymOnly ? " · at the gym" : ""}</button>`}
+  `, sheet => {
+    const b = sheet.querySelector("[data-start-single]");
+    if (b) b.onclick = () => { closeSheet(); startSingleExercise(b.dataset.startSingle); };
+  });
+}
+
+function startSingleExercise(exId) {
+  const ex = EXERCISES.find(e => e.id === exId);
+  if (!ex) return;
+  const location = ex.req.includes("gym") ? "gym" : "home";
+  const rx = ex.power
+    ? { sets: 4, repLo: 3, repHi: 5, rest: 120 }
+    : { sets: 3, repLo: 8, repHi: 12, rest: 90 };
+  const slot = { pattern: ex.pattern, target: PATTERN_LABEL[ex.pattern], rx };
+  const templateId = "single_" + ex.id;
+  const existing = S.workoutLogs.find(l => l.date === todayISO() && l.templateId === templateId);
+  const prior = existing ? (existing.entries || []).find(en => en.exId === ex.id) : null;
+  session = {
+    templateId, location,
+    avail: availableEquipment(location),
+    tpl: { id: templateId, label: ex.name, color: "strength", type: "SINGLE" },
+    slots: [{ slot, ex, sets: prior ? prior.sets : Array.from({ length: rx.sets }, () => ({ reps: null, load: "", done: false })) }],
+  };
+  renderSession();
+}
+
+function openPractice(key) {
+  if (key === "pelvic") openPelvic();
+  else if (key === "coherence") openCoherence("coherence");
+  else if (key === "box") openBoxBreathing();
+  else if (key === "holds") openBreathHold();
+  else if (key === "bolt") openBolt();
+  else if (key === "mob_dynamic") openMobilityPlayer("dynamic");
+  else if (key === "mob_static") openMobilityPlayer("static");
+  else if (key === "meditation") openCoherence("meditation");
 }
 
 /* ---------- Progress ---------- */
@@ -494,6 +618,7 @@ function renderEquipment() {
   }).join("");
   const poolSize = EXERCISES.filter(ex => ex.req.every(r => S.equipment.includes(r) || r === "gym")).length;
   return `
+    <button class="back-btn" data-act="more-back">‹ More</button>
     <div class="hdr"><h1>Equipment</h1></div>
     <div class="sub num">Toggle "I got this" and the exercise pool expands instantly — <b>${poolSize}</b> of ${EXERCISES.length} exercises currently eligible (gym days unlock the rest).</div>
     ${recEq ? `
@@ -506,14 +631,32 @@ function renderEquipment() {
     ${tiers}`;
 }
 
-/* ---------- More (nutrition & recovery + settings) ---------- */
-function renderMore() {
+/* ---------- More menu + sub-screens ---------- */
+function renderMoreMenu() {
+  return `
+    <div class="hdr"><h1>More</h1></div>
+    <div class="sub">Gear, recovery, and settings.</div>
+    <button class="menu-card" data-act="more-nav" data-view="equip">
+      <div class="dot strength"></div>
+      <div><div class="m-title">Equipment</div><div class="m-sub">Tiers, unlocks, next-buy recommendation</div></div>
+      <div class="m-arrow">›</div>
+    </button>
+    <button class="menu-card" data-act="more-nav" data-view="recovery">
+      <div class="dot nutrition"></div>
+      <div><div class="m-title">Recovery & nutrition</div><div class="m-sub">Protein, sleep, backup, settings</div></div>
+      <div class="m-arrow">›</div>
+    </button>`;
+}
+
+/* ---------- Recovery (nutrition + settings sub-screen) ---------- */
+function renderRecovery() {
   const n = S.nutrition[todayISO()] || {};
   const month = new Date().getMonth(); // 0-11
   const vitD = month >= 9 || month <= 2; // Oct–Mar in Toronto
   const bw = latestMetric("BODYWEIGHT");
   const proteinTarget = bw ? Math.round(bw.value * 2.2 * 0.9) : null; // ~0.9 g/lb
   return `
+    <button class="back-btn" data-act="more-back">‹ More</button>
     <div class="hdr"><h1>Recovery</h1></div>
     <div class="sub">Light touch. Reminders and targets, not obsessive logging.</div>
 
@@ -1365,7 +1508,9 @@ function openMetricSheet(type) {
 ===================================================================== */
 $("#tabbar").addEventListener("click", e => {
   const t = e.target.closest(".tab"); if (!t) return;
-  currentTab = t.dataset.tab; render();
+  currentTab = t.dataset.tab;
+  if (currentTab === "more") moreView = "menu";
+  render();
 });
 
 $("#screen").addEventListener("click", e => {
@@ -1384,7 +1529,12 @@ $("#screen").addEventListener("click", e => {
   if (act === "open-box") openBoxBreathing();
   if (act === "open-bolt") openBolt();
   if (act === "goto-progress") { currentTab = "progress"; render(); }
-  if (act === "goto-recovery") { currentTab = "more"; render(); }
+  if (act === "goto-recovery") { currentTab = "more"; moreView = "recovery"; render(); }
+  if (act === "more-nav") { moreView = b.dataset.view; render(); }
+  if (act === "more-back") { moreView = "menu"; render(); }
+  if (act === "lib-cat") { libCat = b.dataset.cat; render(); }
+  if (act === "ex-detail") openExerciseSheet(b.dataset.ex);
+  if (act === "open-practice") openPractice(b.dataset.open);
   if (act === "export-backup") exportBackup();
   if (act === "import-backup") importBackup();
   if (act === "log-metric") openMetricSheet(b.dataset.type);

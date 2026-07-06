@@ -237,6 +237,31 @@ const METRIC_DEFS = {
   BENCHMARK:  { label:"Max push-ups",unit:"reps",color:"#30DB5B", goodDir: 1, note:"Monthly benchmark set." },
 };
 
+/* Library categories — human groupings, not movement-pattern jargon */
+const CATEGORIES = [
+  { id:"lower",   label:"Lower body",     patterns:["SQUAT","HINGE","LUNGE"],               color:"strength" },
+  { id:"upper",   label:"Upper body",     patterns:["H_PUSH","V_PUSH","H_PULL","V_PULL"],   color:"mobility" },
+  { id:"core",    label:"Core",           patterns:["CORE","CARRY"],                        color:"pelvic" },
+  { id:"power",   label:"Power & speed",  patterns:["PLYO","REACTION"],                     color:"hiit" },
+  { id:"cardio",  label:"Conditioning",   patterns:["CARDIO"],                              color:"hiit" },
+  { id:"pelvic",  label:"Pelvic floor",   practice:"pelvic",                                color:"pelvic" },
+  { id:"breath",  label:"Breathwork",     practice:"breath",                                color:"breath" },
+  { id:"mobility",label:"Mobility",       practice:"mobility",                              color:"mobility" },
+  { id:"mind",    label:"Meditation",     practice:"mind",                                  color:"mind" },
+];
+
+/* Guided practices shown in the Library alongside exercises */
+const PRACTICES = [
+  { id:"pf_session",  cat:"pelvic",   name:"Pelvic floor session",  sub:"3 sets · slow holds + quick flicks · ~4 min", color:"pelvic",   open:"pelvic" },
+  { id:"coherence",   cat:"breath",   name:"Coherence breathing",   sub:"5s in / 5s out · the daily default",          color:"breath",   open:"coherence" },
+  { id:"box",         cat:"breath",   name:"Box breathing",         sub:"4·4·4·4 · pre-lift focus / wind-down",        color:"breath",   open:"box" },
+  { id:"holds",       cat:"breath",   name:"Breath-hold walk",      sub:"Exhale-hold intervals · 2–3× a week",         color:"breath",   open:"holds" },
+  { id:"bolt",        cat:"breath",   name:"BOLT test",             sub:"The breathwork KPI · re-test monthly",        color:"breath",   open:"bolt" },
+  { id:"mob_dynamic", cat:"mobility", name:"Dynamic flow",          sub:"5 min · pre-workout",                          color:"mobility", open:"mob_dynamic" },
+  { id:"mob_static",  cat:"mobility", name:"Deep static flow",      sub:"12 min · evening / light day only",            color:"mobility", open:"mob_static" },
+  { id:"meditation",  cat:"mind",     name:"Solar-plexus meditation", sub:"7 min · hand on abdomen · ~6 breaths/min",   color:"mind",     open:"meditation" },
+];
+
 const PATTERN_LABEL = {
   SQUAT:"Squat", HINGE:"Hinge", H_PUSH:"Horizontal push", V_PUSH:"Vertical push",
   H_PULL:"Horizontal pull", V_PULL:"Vertical pull", LUNGE:"Lunge", CARRY:"Carry",
