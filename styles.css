@@ -27,11 +27,57 @@
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
 
+  --c-amber: #F0A44B;      /* hinge / carry */
+
   --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
   font-size: 16px;
 }
+/* ---------- light theme: sumi on washi ---------- */
+:root[data-theme="light"] {
+  --bg: #F3EFE6;
+  --surface: #FBF8F2;
+  --surface-2: #EFEAE0;
+  --surface-3: #E3DDCF;
+  --line: #DCD5C5;
+  --text: #1A1814;
+  --text-2: #6E6759;
+  --text-3: #A39B89;
+
+  --c-strength: #D93A29;
+  --c-hiit: #D31E55;
+  --c-breath: #0D9C8D;
+  --c-mobility: #3A6FE0;
+  --c-pelvic: #9647D9;
+  --c-mind: #A87C20;
+  --c-nutrition: #1E9B50;
+  --c-rest: #8C877C;
+  --c-amber: #C07A1B;
+}
+:root[data-theme="light"] #tabbar { background: rgba(247,243,235,0.86); }
+:root[data-theme="light"] .tab.active { background: rgba(0,0,0,0.06); box-shadow: inset 0 1px 0 rgba(255,255,255,0.75); }
+:root[data-theme="light"] #restbar { background: rgba(250,246,238,0.94); box-shadow: 0 10px 36px rgba(60,50,30,0.18); }
+:root[data-theme="light"] .card, :root[data-theme="light"] .hero, :root[data-theme="light"] .track-card,
+:root[data-theme="light"] .ex-card, :root[data-theme="light"] .menu-card, :root[data-theme="light"] .slot-card,
+:root[data-theme="light"] .tier-card {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 3px rgba(60,50,30,0.06);
+}
+:root[data-theme="light"] .card::before, :root[data-theme="light"] .hero::before,
+:root[data-theme="light"] .track-card::before, :root[data-theme="light"] .ex-card::before,
+:root[data-theme="light"] .menu-card::before, :root[data-theme="light"] .slot-card::before,
+:root[data-theme="light"] .tier-card::before, :root[data-theme="light"] .opt-row::before,
+:root[data-theme="light"] .tab::before, :root[data-theme="light"] .btn::before,
+:root[data-theme="light"] .cat-chip::before, :root[data-theme="light"] .gym-toggle::before {
+  background: radial-gradient(190px circle at var(--gx, 50%) var(--gy, 35%),
+    rgba(255,255,255,0.75), rgba(255,255,255,0.2) 45%, transparent 68%);
+}
+:root[data-theme="light"] #toast { background: #2A2620; color: #F5F1E8; }
+:root[data-theme="light"] .btn.strength, :root[data-theme="light"] .btn.hiit,
+:root[data-theme="light"] .btn.mobility, :root[data-theme="light"] .btn.pelvic { color: #fff; }
+:root[data-theme="light"] .btn.breath, :root[data-theme="light"] .btn.mind { color: #fff; }
+:root[data-theme="light"] .set-done.on { color: #fff; }
+
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { height: 100%; }
 body {
@@ -464,6 +510,8 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
   opacity: 0.38; pointer-events: none;
 }
 .track-card .motif { top: 40px; right: -18px; opacity: 0.34; } /* keep clear of the ✓ ring */
+.chart-card { overflow: hidden; }
+.chart-card .motif { top: auto; bottom: -20px; right: -16px; width: 78px; height: 78px; opacity: 0.14; }
 .ex-card, .menu-card { overflow: hidden; }
 .ex-card .motif, .menu-card .motif { top: -20px; right: -16px; width: 80px; height: 80px; opacity: 0.28; }
 

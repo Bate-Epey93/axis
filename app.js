@@ -27,6 +27,18 @@ function load() {
 }
 function save() { localStorage.setItem(DB_KEY, JSON.stringify(S)); }
 
+/* ---------- theme ---------- */
+function applyTheme() {
+  const pref = (S.settings && S.settings.theme) || "dark";
+  const dark = pref === "auto" ? !window.matchMedia("(prefers-color-scheme: light)").matches : pref === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = dark ? "#0B0B0E" : "#F3EFE6";
+}
+window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  if ((S.settings && S.settings.theme) === "auto") { applyTheme(); render(); }
+});
+
 /* Ask the browser not to evict our storage (iOS/Android honor this for installed PWAs) */
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
@@ -262,12 +274,31 @@ function motifSVG(kind, color) {
     mind:     `<circle cx="50" cy="50" r="30" stroke-dasharray="152 37" transform="rotate(-70 50 50)"/>`,         // small enso
     strength: `<path d="M14 74 L38 30 L54 56 L68 34 L86 74"/>`,                                                   // mountain ridge
     nutrition:`<path d="M50 82 Q24 60 34 34 Q54 26 64 40 Q72 62 50 82Z"/><path d="M50 78 Q48 56 58 40" opacity="0.5"/>`, // leaf
+    torii:    `<path d="M14 34 Q50 22 86 34"/><path d="M28 32 V80"/><path d="M72 32 V80"/><path d="M22 50 H78" opacity="0.45"/>`, // torii gate
+    core:     `<path d="M16 46 Q50 34 84 46"/><path d="M16 62 Q50 50 84 62" opacity="0.45"/><path d="M48 38 Q58 52 46 66"/>`,     // obi knot
+    bolt:     `<path d="M58 12 L34 52 H52 L40 88"/>`,                                                             // lightning
+    pulse:    `<path d="M10 54 H30 L42 28 L56 78 L66 46 H90"/>`,                                                  // heartbeat
   };
   return `<svg class="motif" viewBox="0 0 100 100" aria-hidden="true" style="color:${color}">
     <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">${strokes[kind] || strokes.mind}</g>
   </svg>`;
 }
-const MOTIF_COLORS = { pelvic:"#C77DFF", breath:"#3ED6C4", mobility:"#6C9FFF", mind:"#E8C36A", strength:"#FF4F3F", nutrition:"#4CD97B" };
+const MOTIF_COLORS = { pelvic:"var(--c-pelvic)", breath:"var(--c-breath)", mobility:"var(--c-mobility)", mind:"var(--c-mind)", strength:"var(--c-strength)", nutrition:"var(--c-nutrition)" };
+const PATTERN_MOTIF = {
+  SQUAT:  ["strength","var(--c-strength)"], HINGE: ["strength","var(--c-amber)"], LUNGE: ["strength","var(--c-strength)"],
+  CARRY:  ["strength","var(--c-amber)"],
+  H_PUSH: ["torii","var(--c-mobility)"],    V_PUSH:["torii","var(--c-mobility)"],
+  H_PULL: ["torii","var(--c-breath)"],      V_PULL:["torii","var(--c-breath)"],
+  CORE:   ["core","var(--c-pelvic)"],
+  PLYO:   ["bolt","var(--c-hiit)"],         REACTION:["bolt","var(--c-hiit)"],
+  CARDIO: ["pulse","var(--c-hiit)"],
+};
+const METRIC_MOTIF = {
+  BOLT: ["breath","var(--c-breath)"], WAIST: ["mind","var(--c-strength)"], BODYWEIGHT: ["strength","var(--c-rest)"],
+  LIFT_SQUAT: ["strength","var(--c-strength)"], LIFT_HINGE: ["strength","var(--c-amber)"],
+  LIFT_PUSH: ["torii","var(--c-mobility)"], LIFT_PULL: ["torii","var(--c-breath)"],
+  BENCHMARK: ["pulse","var(--c-nutrition)"],
+};
 
 /* ---------- Today ---------- */
 function renderToday() {
@@ -280,12 +311,12 @@ function renderToday() {
   const overtraining = consec >= 6 && tpl.type !== "REST";
   const deloadDue = !isDeload() && weeksSinceDeload() >= 5;
 
-  const ensoColor = { strength:"#FF4F3F", hiit:"#FF2D6C", breath:"#3ED6C4", mobility:"#6C9FFF", rest:"#8E8E93" }[tpl.color] || "#FF4F3F";
+  const ensoColor = { strength:"var(--c-strength)", hiit:"var(--c-hiit)", breath:"var(--c-breath)", mobility:"var(--c-mobility)", rest:"var(--c-rest)" }[tpl.color] || "var(--c-strength)";
   const enso = `
-    <svg class="enso" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="38" fill="none" stroke="${ensoColor}" stroke-width="5"
+    <svg class="enso" viewBox="0 0 100 100" aria-hidden="true" style="color:${ensoColor}">
+      <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="5"
         stroke-linecap="round" stroke-dasharray="200 39" transform="rotate(-64 50 50)" opacity="0.85"/>
-      <circle cx="50" cy="50" r="38" fill="none" stroke="${ensoColor}" stroke-width="2"
+      <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-dasharray="30 209" transform="rotate(-80 50 50)" opacity="0.35"/>
     </svg>`;
   let sessionCard;
@@ -415,8 +446,10 @@ function renderLibrary() {
       const locked = missing.length > 0;
       const last = libLastDone(ex.id);
       const eqTxt = ex.req.length ? ex.req.map(r => (EQUIPMENT.find(q => q.id === r) || { name: r }).name).join(" · ") : "Bodyweight";
+      const pm = PATTERN_MOTIF[ex.pattern];
       return `
         <button class="ex-card ${locked ? "locked" : ""}" data-act="ex-detail" data-ex="${ex.id}">
+          ${pm ? motifSVG(pm[0], pm[1]) : ""}
           <div>
             <div class="ex-title">${esc(ex.name)}</div>
             <div class="ex-sub">${esc(eqTxt)}${locked ? " · not owned yet" : gymOnly ? " · gym day" : ""}</div>
@@ -503,8 +536,10 @@ function renderProgress() {
       deltaHtml = `<span class="delta ${good} num">${d > 0 ? "+" : ""}${Math.round(d*10)/10} ${def.unit}</span>`;
     }
     const due = metricDue(t) && ["BOLT","WAIST","BENCHMARK","BODYWEIGHT"].includes(t);
+    const mm = METRIC_MOTIF[t];
     return `
       <div class="card chart-card ${due ? "due-card" : ""}">
+        ${mm ? motifSVG(mm[0], mm[1]) : ""}
         <div class="metric-head">
           <div><h3>${def.label}${due ? " · due" : ""}</h3>${def.note ? `<div class="meta">${def.note}</div>` : ""}</div>
           <div style="text-align:right;"><div class="val num">${latest ? latest.value + " " + def.unit : "—"}</div>${deltaHtml}</div>
@@ -534,8 +569,11 @@ function drawAllCharts() {
     const pad = (hi-lo)*0.15; lo -= pad; hi += pad;
     const x = i => P + (W-2*P) * (i/(series.length-1));
     const y = v => H-P - (H-2*P) * ((v-lo)/(hi-lo));
-    // faint grid
-    ctx.strokeStyle = "#26262A"; ctx.lineWidth = 1;
+    // faint grid — read theme colors live so light mode charts stay legible
+    const rootCss = getComputedStyle(document.documentElement);
+    const gridColor = rootCss.getPropertyValue("--line").trim() || "#26262A";
+    const bgColor = rootCss.getPropertyValue("--bg").trim() || "#0A0A0B";
+    ctx.strokeStyle = gridColor; ctx.lineWidth = 1;
     for (let g=0; g<4; g++) { const gy = P + (H-2*P)*g/3; ctx.beginPath(); ctx.moveTo(P,gy); ctx.lineTo(W-P,gy); ctx.stroke(); }
     // area fill
     ctx.beginPath(); ctx.moveTo(x(0), y(vals[0]));
@@ -549,7 +587,7 @@ function drawAllCharts() {
     // endpoint emphasis
     ctx.beginPath(); ctx.arc(x(vals.length-1), y(vals[vals.length-1]), 6, 0, Math.PI*2);
     ctx.fillStyle = def.color; ctx.fill();
-    ctx.strokeStyle = "#0A0A0B"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = bgColor; ctx.lineWidth = 3; ctx.stroke();
   });
 }
 
@@ -728,6 +766,8 @@ function renderRecovery() {
 
     <div class="sec">Settings</div>
     <div class="card">
+      <div class="eq-row"><div><div class="eq-name">Theme</div><div class="eq-unlocks">${(S.settings.theme || "dark") === "light" ? "Light — sumi on washi" : (S.settings.theme === "auto" ? "Auto — follows the system" : "Dark — ink")}</div></div>
+        <button class="btn ghost sm" data-act="cycle-theme">${{ dark:"Dark", light:"Light", auto:"Auto" }[S.settings.theme || "dark"]}</button></div>
       <div class="eq-row"><div class="eq-name">Timer sounds</div>
         <button class="eq-check ${S.settings.sound ? "on" : ""}" data-act="toggle-sound" aria-label="Toggle sound"></button></div>
       <div class="eq-row"><div><div class="eq-name">Coherence rate</div><div class="eq-unlocks num">${S.settings.coherenceRate} breaths/min</div></div>
@@ -1624,6 +1664,11 @@ $("#screen").addEventListener("click", e => {
     });
   }
   if (act === "toggle-sound") { S.settings.sound = !S.settings.sound; save(); render(); }
+  if (act === "cycle-theme") {
+    const order = ["dark", "light", "auto"];
+    S.settings.theme = order[(order.indexOf(S.settings.theme || "dark") + 1) % 3];
+    save(); applyTheme(); render();
+  }
   if (act === "cycle-rate") { S.settings.coherenceRate = S.settings.coherenceRate >= 7 ? 5 : S.settings.coherenceRate + 0.5; save(); render(); }
   if (act === "reset-all") {
     showSheet(`<h3>Reset everything?</h3><div class="meta" style="margin-bottom:14px;">All logs, metrics, and streaks will be wiped. This cannot be undone.</div>
@@ -1659,4 +1704,5 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
+applyTheme();
 render();
