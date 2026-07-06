@@ -594,9 +594,33 @@ function renderProgress() {
       </div>`;
   }).join("");
   const deloadIn = Math.max(0, 5 - weeksSinceDeload());
+  // training-time totals from logged session durations
+  const isoDaysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+  const minsBetween = (fromISO, toISO) => Math.round(S.workoutLogs
+    .filter(l => l.completed && l.durationSecs && l.date >= fromISO && l.date <= toISO)
+    .reduce((a, l) => a + l.durationSecs, 0) / 60);
+  const todayMin = minsBetween(todayISO(), todayISO());
+  const thisWk = minsBetween(isoDaysAgo(6), todayISO());
+  const lastWk = minsBetween(isoDaysAgo(13), isoDaysAgo(7));
+  const wkDelta = thisWk - lastWk;
+  const wkTrend = lastWk === 0 ? ["", "var(--text-2)", "first week of time data — keep logging"] :
+    wkDelta > 10 ? ["↑", "var(--c-nutrition)", `+${wkDelta} min vs last week — building`] :
+    wkDelta < -10 ? ["↓", "var(--c-hiit)", `${wkDelta} min vs last week — lighter week`] :
+    ["≈", "var(--text-2)", "level with last week — steady"];
+  const timeCard = `
+    <div class="card stripe strength">
+      <h3>Training time</h3>
+      <div class="metric-head" style="margin-top:8px;">
+        <div><div class="meta">Today</div><div class="val num" style="font-size:1.25rem;">${todayMin} min</div></div>
+        <div><div class="meta">Last 7 days</div><div class="val num" style="font-size:1.25rem;">${thisWk} min</div></div>
+        <div><div class="meta">Prior 7</div><div class="val num" style="font-size:1.25rem; color:var(--text-2);">${lastWk} min</div></div>
+      </div>
+      <div class="meta" style="color:${wkTrend[1]}; font-weight:700;">${wkTrend[0]} ${wkTrend[2]}</div>
+    </div>`;
   return `
     <div class="hdr"><h1>Progress</h1></div>
     <div class="sub">Sexual stamina, breath, and mobility move on an <b>8–12 week</b> horizon. Judge trends, not days.</div>
+    ${timeCard}
     <div class="card"><div class="card-row"><div class="dot rest"></div><div><h3 class="num">Deload in ~${deloadIn} week${deloadIn===1?"":"s"}</h3><div class="meta">Every 4–6 weeks, volume drops 40% for 7 days.</div></div></div></div>
     ${cards}`;
 }
@@ -969,11 +993,11 @@ function runCustom(id) {
   openConductor(w);
 }
 
-function finishCustom(w, rounds) {
+function finishCustom(w, rounds, durationSecs) {
   S.workoutLogs.push({
     date: todayISO(), templateId: "custom_" + w.id, location: "home",
     entries: w.exIds.map(id => ({ exId: id, sets: [{ reps: null, load: "", done: true }] })),
-    completed: true,
+    completed: true, durationSecs: durationSecs || 0,
   });
   save(); beepDone(); closeOverlay(); render();
   toast(`${w.name} logged${rounds ? " · " + rounds + " rounds" : ""} · 🔥 ${workoutStreak()}d`);
@@ -1065,7 +1089,8 @@ function openConductor(w) {
     if (mode === "rounds" && rounds < cfg.rounds && cfg.rest) restUntil = Date.now() + cfg.rest * 1000;
     tick();
   };
-  $("#cd-finish").onclick = () => { clearInterval(int); finishCustom(w, rounds); };
+  const openedAt = Date.now();
+  $("#cd-finish").onclick = () => { clearInterval(int); finishCustom(w, rounds, Math.round((Date.now() - openedAt) / 1000)); };
 }
 
 /* scheduler: place strength days (lower/upper/power) on gym-marked days when possible,
@@ -1549,20 +1574,30 @@ function finishSession() {
   save();
   beepDone();
   // ---- session summary ----
+  const durSecs = log.startedAt ? Math.max(60, Date.now() - log.startedAt) / 1000 : 0;
+  log.durationSecs = Math.round(durSecs);
+  save();
   const allSets = session.slots.flatMap(s => s.sets);
   const doneSets = allSets.filter(s => s.done).length;
   const pct = allSets.length ? Math.round(doneSets / allSets.length * 100) : 0;
-  const durMin = log.startedAt ? Math.max(1, Math.round((Date.now() - log.startedAt) / 60000)) : null;
+  const totalMin = Math.max(1, Math.round(durSecs / 60));
   const restMin = Math.round((log.restSecs || 0) / 60 * 10) / 10;
+  const workMin = Math.max(0, Math.round((durSecs - (log.restSecs || 0)) / 60 * 10) / 10);
   const prev = [...S.workoutLogs].reverse().find(l => l.templateId === session.templateId && l.completed && l.date < todayISO());
   let trendRow = `<div class="eq-row"><div class="eq-name">vs last time</div><div class="eq-unlocks">First one logged — this is the baseline</div></div>`;
   if (prev) {
     const cur = sessionScore(log), old = sessionScore(prev);
     const d = old ? Math.round((cur - old) / old * 100) : 0;
-    const arrow = d > 2 ? ["↑", "var(--c-nutrition)", `+${d}% volume — trending up`] :
-                  d < -2 ? ["↓", "var(--c-hiit)", `${d}% volume — lighter day, that's fine`] :
-                  ["≈", "var(--text-2)", "level with last time — consistency wins"];
-    trendRow = `<div class="eq-row"><div class="eq-name">vs last time (${prev.date})</div><div class="eq-unlocks" style="color:${arrow[1]}; font-weight:700;">${arrow[0]} ${arrow[2]}</div></div>`;
+    const prevMin = prev.durationSecs ? Math.round(prev.durationSecs / 60) : null;
+    const dt = prevMin != null ? totalMin - prevMin : null;
+    let arrow;
+    if (d > 2 && dt != null && dt <= 0) arrow = ["↑", "var(--c-nutrition)", `+${d}% volume in ${dt === 0 ? "the same time" : Math.abs(dt) + " min less"} — clear improvement`];
+    else if (d > 2) arrow = ["↑", "var(--c-nutrition)", `+${d}% volume — trending up`];
+    else if (d >= -2 && dt != null && dt < 0) arrow = ["↑", "var(--c-nutrition)", `same work, ${Math.abs(dt)} min faster — conditioning is improving`];
+    else if (d < -2) arrow = ["↓", "var(--c-hiit)", `${d}% volume — lighter day, that's fine`];
+    else arrow = ["≈", "var(--text-2)", "level with last time — consistency wins"];
+    trendRow = `<div class="eq-row"><div class="eq-name">vs last time (${prev.date})</div><div class="eq-unlocks" style="color:${arrow[1]}; font-weight:700;">${arrow[0]} ${arrow[2]}</div></div>`
+      + (prevMin != null ? `<div class="eq-row"><div class="eq-name">Pace</div><div class="eq-unlocks num">${totalMin} min vs ${prevMin} min last time</div></div>` : "");
   }
   const tplLabel = session.tpl ? session.tpl.label : "Session";
   closeOverlay();
@@ -1571,8 +1606,9 @@ function finishSession() {
     <div style="text-align:center; margin-bottom:6px;">${flameSVG("var(--c-strength)")}</div>
     <h3 style="text-align:center;">${esc(tplLabel)} — done</h3>
     <div class="meta" style="text-align:center; margin-bottom:14px;">${flameSVG("var(--c-mind)")} ${workoutStreak()}-day streak</div>
-    ${durMin ? `<div class="eq-row"><div class="eq-name">Time training</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${durMin} min</div></div>` : ""}
-    <div class="eq-row"><div class="eq-name">Time resting</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${restMin} min</div></div>
+    <div class="eq-row"><div class="eq-name">Total time</div><div class="eq-unlocks num" style="font-size:1.05rem; color:var(--text); font-weight:700;">${totalMin} min</div></div>
+    <div class="eq-row"><div class="eq-name">Working</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${workMin} min</div></div>
+    <div class="eq-row"><div class="eq-name">Resting</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${restMin} min</div></div>
     <div class="eq-row"><div class="eq-name">Completed</div><div class="eq-unlocks num" style="font-size:1rem; color:${pct >= 100 ? "var(--c-nutrition)" : "var(--text)"};">${doneSets}/${allSets.length} sets · ${pct}%</div></div>
     ${trendRow}
     <button class="btn primary" style="margin-top:14px;" id="sum-done">Done</button>
