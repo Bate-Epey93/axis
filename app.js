@@ -17,6 +17,7 @@ const defaultState = () => ({
   nutrition: {},                 // date -> {protein, sleep}
   pfPosition: "lying",
   lastBackup: null,
+  customWorkouts: [],
   settings: { coherenceRate: 6, sound: true },
 });
 let S = load();
@@ -475,11 +476,17 @@ function openExerciseSheet(exId) {
   const gymOnly = ex.req.includes("gym");
   const last = libLastDone(ex.id);
   const eqTxt = ex.req.length ? ex.req.map(r => (EQUIPMENT.find(q => q.id === r) || { name: r }).name).join(", ") : "Bodyweight — always available";
+  const info = EX_INFO[ex.id] || {};
   showSheet(`
     <span class="tag ${ex.pattern}">${esc(PATTERN_LABEL[ex.pattern])}</span>
     <h3 style="margin-top:12px;">${esc(ex.name)}</h3>
-    ${ex.cue ? `<div class="meta" style="margin-bottom:14px; line-height:1.55;">${esc(ex.cue)}</div>` : ""}
-    <div class="eq-row" style="border-top:1px solid var(--line);"><div><div class="eq-name">Needs</div><div class="eq-unlocks">${esc(eqTxt)}</div></div></div>
+    ${info.desc ? `<div class="meta" style="margin-bottom:12px; line-height:1.6;">${esc(info.desc)}</div>` : ""}
+    ${info.primary ? `
+      <div class="muscle-row"><span class="m-label">Primary</span>${info.primary.map(m => `<span class="chip m-chip">${esc(m)}</span>`).join("")}</div>` : ""}
+    ${info.secondary ? `
+      <div class="muscle-row"><span class="m-label">Secondary</span>${info.secondary.map(m => `<span class="chip m-chip dim">${esc(m)}</span>`).join("")}</div>` : ""}
+    ${ex.cue ? `<div class="eq-row" style="border-top:1px solid var(--line); margin-top:12px;"><div><div class="eq-name">Form</div><div class="eq-unlocks">${esc(ex.cue)}</div></div></div>` : ""}
+    <div class="eq-row"><div><div class="eq-name">Needs</div><div class="eq-unlocks">${esc(eqTxt)}</div></div></div>
     ${ex.ladder ? `<div class="eq-row"><div><div class="eq-name">Progression ladder</div><div class="eq-unlocks">${ex.ladder.map(esc).join(" → ")}</div></div></div>` : ""}
     ${last ? `<div class="eq-row"><div><div class="eq-name">Last done</div><div class="eq-unlocks num">${esc(last.txt)} · ${last.date}</div></div></div>` : ""}
     <div style="height:10px;"></div>
@@ -608,16 +615,296 @@ function renderPlan() {
         ${t.type !== "REST" ? `<button class="gym-toggle num ${isGymDay ? "on" : ""}" data-act="toggle-gym" data-day="${i}">${isGymDay ? "GYM" : "HOME"}</button>` : ""}
       </div>`;
   }).join("");
+  const myWorkouts = (S.customWorkouts || []).map(w => `
+    <div class="card stripe hiit">
+      <div class="card-row">
+        <div style="flex:1">
+          <h3>${esc(w.name)}</h3>
+          <div class="meta">${WORKOUT_MODES[w.mode].label} · ${customSummary(w)} · ${w.exIds.length} exercise${w.exIds.length === 1 ? "" : "s"}</div>
+        </div>
+        <button class="swap-btn" data-act="del-custom" data-id="${w.id}">Delete</button>
+      </div>
+      <button class="btn hiit sm" style="margin-top:12px;" data-act="run-custom" data-id="${w.id}">Run</button>
+    </div>`).join("");
   return `
     <div class="hdr"><h1>Week plan</h1></div>
     <div class="sub">Mark which days the gym is likely. The heavy strength days should land on gym days — but every session has a full home fallback, so nothing blocks you.</div>
     ${ramp ? `<div class="card due-card"><h3>Weeks 1–2 ramp</h3><div class="meta">You're on the ramp week: 3 form-focused strength days, 1 HIIT, light days between. The full 6-day split (power day, zone-2, plyo, reaction) takes over in week 3.</div></div>` : ""}
     <div class="card">${rows}</div>
+    <div class="sec">My workouts</div>
+    ${myWorkouts || `<div class="card"><div class="info-note">Nothing built yet. Pick your exercises, choose a timer (HIIT, Tabata, EMOM, AMRAP, rounds, or plain sets), and the pairing brain will suggest what complements what.</div></div>`}
+    <button class="btn primary" data-act="open-builder">＋ Build a workout</button>
+    <div style="height:8px;"></div>
     <div class="card">
       <h3>Scheduler rules</h3>
       <div class="info-note">· 6 days on, 1 off — the rest day is protected.<br>· Two heavy strength days are never stacked back-to-back.<br>· Any session is completable with band + bodyweight; gym just raises the ceiling.</div>
       <button class="btn ghost sm" style="margin-top:12px;" data-act="auto-schedule">Re-balance week around my gym days</button>
     </div>`;
+}
+
+/* ---------- custom workout builder ---------- */
+function customSummary(w) {
+  const c = w.cfg;
+  if (w.mode === "sets") return `${c.sets}×${c.repLo}–${c.repHi}, rest ${c.rest}s`;
+  if (w.mode === "hiit" || w.mode === "tabata") return `${c.work}s/${c.rest}s × ${c.rounds}`;
+  if (w.mode === "emom") return `${c.minutes} min`;
+  if (w.mode === "amrap") return `${c.minutes} min cap`;
+  if (w.mode === "rounds") return `${c.rounds} rounds, rest ${c.rest}s`;
+  return "free timing";
+}
+
+const CFG_META = {
+  sets:   ["Sets", 1, 1, 10],
+  repLo:  ["Rep min", 1, 1, 30],
+  repHi:  ["Rep max", 1, 1, 50],
+  rest:   ["Rest (s)", 15, 10, 300],
+  work:   ["Work (s)", 5, 10, 180],
+  rounds: ["Rounds", 1, 1, 20],
+  minutes:["Minutes", 1, 3, 60],
+};
+
+let builder = null;
+function openBuilder() {
+  builder = { name: "", mode: "sets", cfg: { ...WORKOUT_MODES.sets.cfg }, exIds: [] };
+  renderBuilder();
+}
+
+/* pairing brain: complement the last pick's pattern, skip patterns already covered */
+function pairSuggestions() {
+  const ownedSet = new Set(S.equipment.filter(x => x !== "gym"));
+  const chosen = builder.exIds.map(id => EXERCISES.find(e => e.id === id)).filter(Boolean);
+  const covered = new Set(chosen.map(e => e.pattern));
+  let targets = [];
+  if (!chosen.length) targets = ["SQUAT", "H_PUSH", "H_PULL"]; // a balanced opening
+  else {
+    for (let i = chosen.length - 1; i >= 0 && targets.length < 3; i--) {
+      (PATTERN_PAIRS[chosen[i].pattern] || []).forEach(p => {
+        if (!covered.has(p) && !targets.includes(p)) targets.push(p);
+      });
+    }
+  }
+  const out = [];
+  for (const p of targets.slice(0, 3)) {
+    const pick = EXERCISES
+      .filter(e => e.pattern === p && !builder.exIds.includes(e.id) && e.req.every(r => r === "gym" || ownedSet.has(r)))
+      .sort((a, b) => (b.priority - (b.req.includes("gym") ? 60 : 0)) - (a.priority - (a.req.includes("gym") ? 60 : 0)))[0];
+    if (pick) out.push({ ex: pick, why: PATTERN_LABEL[p].toLowerCase() });
+  }
+  return out;
+}
+
+function builderCfgUI() {
+  const keys = Object.keys(builder.cfg);
+  if (!keys.length) return "";
+  return `<div class="card">` + keys.map(k => {
+    const [label, step] = CFG_META[k] || [k, 1];
+    return `
+      <div class="eq-row">
+        <div class="eq-name">${label}</div>
+        <div class="stepper" style="margin:0;">
+          <button data-b="st" data-key="${k}" data-d="-${step}">−</button>
+          <div class="stv num" style="min-width:64px; font-size:1.15rem;">${builder.cfg[k]}</div>
+          <button data-b="st" data-key="${k}" data-d="${step}">+</button>
+        </div>
+      </div>`;
+  }).join("") + `</div>`;
+}
+
+function renderBuilder() {
+  const ov = getOverlay();
+  const exList = builder.exIds.map((id, i) => {
+    const ex = EXERCISES.find(e => e.id === id);
+    return `
+      <div class="eq-row">
+        <div><div class="eq-name">${i + 1}. ${esc(ex.name)}</div><div class="eq-unlocks">${PATTERN_LABEL[ex.pattern]}</div></div>
+        <button class="swap-btn" data-b="rm" data-id="${id}">✕</button>
+      </div>`;
+  }).join("");
+  const sugg = pairSuggestions();
+  ov.innerHTML = `
+    <div class="overlay-hdr"><h2>Build a workout</h2><button class="x-btn" data-b="close">✕</button></div>
+    <input class="big-input" id="bw-name" placeholder="Name it — e.g. Hotel-room burner" value="${esc(builder.name)}" style="text-align:left; font-size:1.05rem; font-weight:600;">
+    <div class="sec">Timer</div>
+    <div class="cat-row">${Object.entries(WORKOUT_MODES).map(([k, v]) =>
+      `<button class="cat-chip ${builder.mode === k ? "on" : ""}" data-b="mode" data-mode="${k}">${v.label}</button>`).join("")}</div>
+    <div class="meta" style="margin:0 2px 10px;">${WORKOUT_MODES[builder.mode].hint}</div>
+    ${builderCfgUI()}
+    <div class="sec">Exercises · ${builder.exIds.length}</div>
+    <div class="card">${exList || `<div class="info-note">Nothing yet. Start anywhere — the suggestions below keep the workout balanced.</div>`}</div>
+    ${sugg.length ? `
+      <div class="sec">Pairs well</div>
+      <div class="cat-row">${sugg.map(s => `<button class="cat-chip" data-b="add" data-id="${s.ex.id}">＋ ${esc(s.ex.name)} · ${s.why}</button>`).join("")}</div>` : ""}
+    <button class="btn ghost" data-b="pick">Browse all exercises</button>
+    <button class="btn primary" style="margin-top:10px;" data-b="save">Save workout</button>
+    <div style="height:70px;"></div>`;
+  ov.oninput = e => { if (e.target.id === "bw-name") builder.name = e.target.value; };
+  ov.onclick = e => {
+    const b = e.target.closest("[data-b]"); if (!b) return;
+    const k = b.dataset.b;
+    if (k === "close") { closeOverlay(); render(); }
+    if (k === "mode") { builder.mode = b.dataset.mode; builder.cfg = { ...WORKOUT_MODES[builder.mode].cfg }; renderBuilder(); }
+    if (k === "st") {
+      const key = b.dataset.key, [, , lo, hi] = CFG_META[key] || [0, 0, 1, 999];
+      builder.cfg[key] = Math.min(hi, Math.max(lo, builder.cfg[key] + parseFloat(b.dataset.d)));
+      if (key === "repLo") builder.cfg.repHi = Math.max(builder.cfg.repHi || 0, builder.cfg.repLo);
+      renderBuilder();
+    }
+    if (k === "rm") { builder.exIds = builder.exIds.filter(x => x !== b.dataset.id); renderBuilder(); }
+    if (k === "add") { builder.exIds.push(b.dataset.id); renderBuilder(); }
+    if (k === "pick") openBuilderPicker();
+    if (k === "save") {
+      if (!builder.exIds.length) { toast("Add at least one exercise"); return; }
+      const w = { id: Date.now().toString(36), name: builder.name.trim() || "My workout", mode: builder.mode, cfg: builder.cfg, exIds: builder.exIds };
+      S.customWorkouts.push(w); save();
+      closeOverlay(); currentTab = "plan"; render();
+      toast(`"${w.name}" saved — it lives in Plan`);
+    }
+  };
+}
+
+function openBuilderPicker() {
+  const ownedSet = new Set(S.equipment.filter(x => x !== "gym"));
+  const body = CATEGORIES.filter(c => c.patterns).map(cat => {
+    const exs = EXERCISES.filter(e => cat.patterns.includes(e.pattern) && e.req.every(r => r === "gym" || ownedSet.has(r)))
+      .sort((a, b) => b.priority - a.priority);
+    if (!exs.length) return "";
+    return `<div class="sec">${esc(cat.label)}</div>` + exs.map(ex => `
+      <button class="opt-row ${builder.exIds.includes(ex.id) ? "sel" : ""}" data-pick="${ex.id}">
+        <span>${esc(ex.name)}<span class="o-sub">${PATTERN_LABEL[ex.pattern]}${ex.req.includes("gym") ? " · gym" : ""}</span></span>
+        <span style="margin-left:auto;">${builder.exIds.includes(ex.id) ? "✓" : "＋"}</span>
+      </button>`).join("");
+  }).join("");
+  showSheet(`<h3>Add exercises</h3>${body}<div style="height:8px;"></div><button class="btn primary" id="pick-done">Done</button>`, sheet => {
+    sheet.onclick = e => {
+      if (e.target.closest("#pick-done")) { closeSheet(); renderBuilder(); return; }
+      const b = e.target.closest("[data-pick]"); if (!b) return;
+      const id = b.dataset.pick;
+      if (builder.exIds.includes(id)) { builder.exIds = builder.exIds.filter(x => x !== id); b.classList.remove("sel"); b.lastElementChild.textContent = "＋"; }
+      else { builder.exIds.push(id); b.classList.add("sel"); b.lastElementChild.textContent = "✓"; }
+    };
+  });
+}
+
+/* ---------- custom workout runner ---------- */
+function runCustom(id) {
+  const w = (S.customWorkouts || []).find(x => x.id === id); if (!w) return;
+  if (w.mode === "sets") {
+    const location = w.exIds.some(x => (EXERCISES.find(e => e.id === x) || { req: [] }).req.includes("gym")) ? "gym" : "home";
+    const templateId = "custom_" + w.id;
+    const existing = S.workoutLogs.find(l => l.date === todayISO() && l.templateId === templateId);
+    session = {
+      templateId, location, avail: availableEquipment(location),
+      tpl: { id: templateId, label: w.name, color: "hiit", type: "CUSTOM" },
+      slots: w.exIds.map(exId => {
+        const ex = EXERCISES.find(e => e.id === exId);
+        const prior = existing ? (existing.entries || []).find(en => en.exId === exId) : null;
+        return { slot: { pattern: ex.pattern, target: PATTERN_LABEL[ex.pattern], rx: { sets: w.cfg.sets, repLo: w.cfg.repLo, repHi: w.cfg.repHi, rest: w.cfg.rest } }, ex,
+          sets: prior ? prior.sets : Array.from({ length: w.cfg.sets }, () => ({ reps: null, load: "", done: false })) };
+      }),
+    };
+    renderSession();
+    return;
+  }
+  openConductor(w);
+}
+
+function finishCustom(w, rounds) {
+  S.workoutLogs.push({
+    date: todayISO(), templateId: "custom_" + w.id, location: "home",
+    entries: w.exIds.map(id => ({ exId: id, sets: [{ reps: null, load: "", done: true }] })),
+    completed: true,
+  });
+  save(); beepDone(); closeOverlay(); render();
+  toast(`${w.name} logged${rounds ? " · " + rounds + " rounds" : ""} · 🔥 ${workoutStreak()}d`);
+}
+
+function openConductor(w) {
+  const exs = w.exIds.map(id => EXERCISES.find(e => e.id === id)).filter(Boolean);
+  const mode = w.mode, cfg = w.cfg;
+  const listHtml = exs.map((ex, i) => `
+    <div class="eq-row"><div><div class="eq-name">${i + 1}. ${esc(ex.name)}</div><div class="eq-unlocks">${esc(ex.cue || "")}</div></div></div>`).join("");
+  const hasLap = mode === "amrap" || mode === "rounds";
+  const initClock = (mode === "emom" || mode === "amrap") ? fmtClock(cfg.minutes * 60) : (mode === "hiit" || mode === "tabata") ? "0:10" : "0:00";
+  overlayShell(esc(w.name), "hiit", `
+    <div class="big-timer" style="min-height:300px;">
+      <div class="phase hiit-prep" id="cd-phase">${WORKOUT_MODES[mode].label}</div>
+      <div class="clock num" id="cd-clock">${initClock}</div>
+      <div class="round num" id="cd-round">&nbsp;</div>
+      <div class="btn-row" style="max-width:360px; width:100%;">
+        <button class="btn hiit" id="cd-start">Start</button>
+        ${hasLap ? `<button class="btn ghost" id="cd-lap">Round ✓</button>` : ""}
+      </div>
+      <button class="btn ghost sm" id="cd-finish">Finish & log</button>
+    </div>
+    <div class="sec">The work${mode === "emom" ? " — one exercise per minute, rotating" : mode === "amrap" || mode === "rounds" ? " — one full circuit = one round" : ""}</div>
+    <div class="card">${listHtml}</div>
+    <div style="height:40px;"></div>`);
+  let int = null, running = false, t0 = 0, pausedAt = 0, rounds = 0, lastMark = -1, restUntil = 0, done = false;
+  overlayCleanup = () => clearInterval(int);
+  const phaseEl = $("#cd-phase"), clockEl = $("#cd-clock"), roundEl = $("#cd-round"), startBtn = $("#cd-start");
+  // interval schedule for hiit/tabata
+  const sched = [];
+  if (mode === "hiit" || mode === "tabata") {
+    sched.push({ p: "prep", d: 10, r: 1 });
+    for (let r = 1; r <= cfg.rounds; r++) {
+      sched.push({ p: "work", d: cfg.work, r });
+      if (r < cfg.rounds) sched.push({ p: "rest", d: cfg.rest, r });
+    }
+  }
+  const schedTotal = sched.reduce((a, s) => a + s.d, 0);
+  const setUI = (phase, cls, clock, round) => {
+    phaseEl.textContent = phase; phaseEl.className = "phase " + cls;
+    clockEl.textContent = clock; clockEl.className = "clock num " + cls;
+    roundEl.textContent = round;
+  };
+  const tick = () => {
+    const el = (Date.now() - t0) / 1000;
+    if (mode === "hiit" || mode === "tabata") {
+      if (el >= schedTotal) { if (!done) { done = true; beepDone(); } clearInterval(int); setUI("DONE", "hiit-done", "0:00", "All rounds complete — finish & log"); return; }
+      let acc = 0, idx = 0;
+      while (el >= acc + sched[idx].d) { acc += sched[idx].d; idx++; }
+      const cur = sched[idx], left = Math.ceil(acc + cur.d - el);
+      if (idx !== lastMark) { if (lastMark >= 0) beepHi(); lastMark = idx; }
+      const map = { prep: ["GET READY", "hiit-prep"], work: ["WORK", "hiit-work"], rest: ["RECOVER", "hiit-rest"] };
+      setUI(map[cur.p][0], map[cur.p][1], fmtClock(left), `Round ${cur.r} / ${cfg.rounds}`);
+    } else if (mode === "emom") {
+      const total = cfg.minutes * 60;
+      if (el >= total) { if (!done) { done = true; beepDone(); } clearInterval(int); setUI("DONE", "hiit-done", "0:00", cfg.minutes + " minutes complete"); return; }
+      const minute = Math.floor(el / 60);
+      if (minute !== lastMark) { if (lastMark >= 0) beepHi(); lastMark = minute; }
+      const ex = exs[minute % exs.length];
+      setUI(ex ? ex.name : "WORK", "hiit-work", fmtClock(60 - Math.floor(el % 60)), `Minute ${minute + 1} / ${cfg.minutes}`);
+    } else if (mode === "amrap") {
+      const left = cfg.minutes * 60 - el;
+      if (left <= 0) { if (!done) { done = true; beepDone(); } clearInterval(int); setUI("TIME", "hiit-done", "0:00", rounds + " rounds — finish & log"); return; }
+      setUI("AMRAP", "hiit-work", fmtClock(Math.ceil(left)), `${rounds} round${rounds === 1 ? "" : "s"} down`);
+    } else if (mode === "rounds") {
+      if (restUntil > Date.now()) {
+        setUI("REST", "hiit-rest", fmtClock(Math.ceil((restUntil - Date.now()) / 1000)), `Round ${rounds} / ${cfg.rounds} done`);
+        return;
+      }
+      if (rounds >= cfg.rounds) { if (!done) { done = true; beepDone(); } clearInterval(int); setUI("DONE", "hiit-done", fmtClock(Math.floor(el)), "All rounds complete — finish & log"); return; }
+      setUI("WORK", "hiit-work", fmtClock(Math.floor(el)), `Round ${rounds + 1} / ${cfg.rounds}`);
+    } else { // stopwatch
+      setUI("ELAPSED", "hiit-prep", fmtClock(Math.floor(el)), " ");
+    }
+  };
+  startBtn.onclick = () => {
+    if (running) { running = false; clearInterval(int); pausedAt = Date.now(); startBtn.textContent = "Resume"; return; }
+    running = true; startBtn.textContent = "Pause";
+    if (pausedAt) { const d = Date.now() - pausedAt; t0 += d; if (restUntil) restUntil += d; } else t0 = Date.now();
+    pausedAt = 0;
+    clearInterval(int); int = setInterval(tick, 250); tick();
+  };
+  const lapBtn = $("#cd-lap");
+  if (lapBtn) lapBtn.onclick = () => {
+    if (!running) return;
+    rounds++;
+    beepHi();
+    if (mode === "rounds" && rounds < cfg.rounds && cfg.rest) restUntil = Date.now() + cfg.rest * 1000;
+    tick();
+  };
+  $("#cd-finish").onclick = () => { clearInterval(int); finishCustom(w, rounds); };
 }
 
 /* scheduler: place strength days (lower/upper/power) on gym-marked days when possible,
@@ -1627,6 +1914,20 @@ $("#screen").addEventListener("click", e => {
     save(); render();
   }
   if (act === "auto-schedule") autoSchedule();
+  if (act === "open-builder") openBuilder();
+  if (act === "run-custom") runCustom(b.dataset.id);
+  if (act === "del-custom") {
+    const w = S.customWorkouts.find(x => x.id === b.dataset.id);
+    showSheet(`<h3>Delete "${esc(w ? w.name : "workout")}"?</h3>
+      <button class="btn hiit" id="delc-yes">Delete</button>
+      <button class="btn ghost" style="margin-top:10px;" id="delc-no">Cancel</button>`, sheet => {
+      sheet.querySelector("#delc-yes").onclick = () => {
+        S.customWorkouts = S.customWorkouts.filter(x => x.id !== b.dataset.id);
+        save(); closeSheet(); render();
+      };
+      sheet.querySelector("#delc-no").onclick = closeSheet;
+    });
+  }
   if (act === "toggle-eq") {
     const id = b.dataset.eq;
     const had = S.equipment.includes(id);

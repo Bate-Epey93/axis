@@ -515,6 +515,16 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .ex-card, .menu-card { overflow: hidden; }
 .ex-card .motif, .menu-card .motif { top: -20px; right: -16px; width: 80px; height: 80px; opacity: 0.28; }
 
+/* ---------- muscle chips (exercise detail) ---------- */
+.muscle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.m-label {
+  font-family: var(--mono); font-size: 0.62rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-3);
+  min-width: 76px;
+}
+.chip.m-chip { text-transform: none; letter-spacing: 0.02em; font-family: var(--sans); font-size: 0.74rem; font-weight: 600; color: var(--text); }
+.chip.m-chip.dim { color: var(--text-2); opacity: 0.75; }
+
 /* ---------- domain-tinted timer notes ---------- */
 .note-pelvic   { color: color-mix(in srgb, var(--c-pelvic) 80%, var(--text-2)); }
 .note-breath   { color: color-mix(in srgb, var(--c-breath) 72%, var(--text-2)); }
