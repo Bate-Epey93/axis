@@ -550,6 +550,10 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 
 /* ---------- flame streak mark ---------- */
 .flame { width: 13px; height: 13px; display: inline-block; vertical-align: -1.5px; }
+.bicon { width: 16px; height: 16px; display: inline-block; vertical-align: -2px; }
+.o-ico .bicon { width: 26px; height: 26px; display: block; }
+h3 .bicon { width: 17px; height: 17px; vertical-align: -2px; }
+.power-flag .bicon { width: 12px; height: 12px; vertical-align: -1px; }
 
 /* ---------- tinted buttons (Progress logging etc.) ---------- */
 .btn.tint {

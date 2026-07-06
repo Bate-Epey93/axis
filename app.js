@@ -316,6 +316,25 @@ function motifSVG(kind, color) {
 }
 const MOTIF_COLORS = { pelvic:"var(--c-pelvic)", breath:"var(--c-breath)", mobility:"var(--c-mobility)", mind:"var(--c-mind)", strength:"var(--c-strength)", nutrition:"var(--c-nutrition)" };
 
+/* small brush icons — same single-stroke language as the motifs */
+function brushIcon(kind, color) {
+  const strokes = {
+    gym:      `<path d="M22 50 H78"/><circle cx="20" cy="50" r="13"/><circle cx="80" cy="50" r="13"/><path d="M35 36 V64 M65 36 V64" opacity="0.5"/>`,           // barbell
+    home:     `<path d="M16 52 Q50 20 84 52"/><path d="M28 52 V80 H72 V52" opacity="0.75"/><path d="M44 80 V62 H56 V80" opacity="0.45"/>`,                        // house
+    travel:   `<rect x="26" y="38" width="48" height="42" rx="9" fill="none"/><path d="M40 38 V30 Q40 24 46 24 H54 Q60 24 60 30 V38" opacity="0.75"/>`,            // suitcase
+    wave:     `<path d="M12 40 Q30 22 50 38 T88 36"/><path d="M20 60 Q38 44 56 56 T86 52" opacity="0.45"/>`,                                                       // air currents
+    boxbreath:`<rect x="18" y="18" width="64" height="64" rx="18" fill="none" stroke-dasharray="200 36"/>`,                                                        // enso square
+    walk:     `<path d="M26 84 Q52 66 40 46 Q30 28 62 18" stroke-dasharray="14 12"/><circle cx="72" cy="16" r="7"/>`,                                              // winding path
+    stopwatch:`<circle cx="50" cy="56" r="30" stroke-dasharray="160 28" transform="rotate(-70 50 56)"/><path d="M50 56 V38" opacity="0.75"/><path d="M42 14 H58"/>`,// brush stopwatch
+    complete: `<circle cx="50" cy="50" r="32" stroke-dasharray="185 16" transform="rotate(-64 50 50)"/><circle cx="50" cy="50" r="8" fill="currentColor" stroke="none"/>`, // closed enso
+    alert:    `<path d="M50 18 Q54 44 51 60" stroke-width="9"/><circle cx="50" cy="80" r="6" fill="currentColor" stroke="none"/>`,                                 // brush exclamation
+    bolt:     `<path d="M58 12 L34 52 H52 L40 88"/>`,                                                                                                              // lightning
+  };
+  return `<svg class="bicon" viewBox="0 0 100 100" aria-hidden="true" style="color:${color}">
+    <g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">${strokes[kind] || strokes.complete}</g>
+  </svg>`;
+}
+
 /* brush-flame streak mark (replaces the emoji) */
 function flameSVG(color) {
   return `<svg class="flame" viewBox="0 0 100 100" aria-hidden="true" style="color:${color}">
@@ -381,7 +400,7 @@ function renderToday() {
 
   const warn = overtraining ? `
     <div class="card warn-card">
-      <h3>⚠︎ ${consec} hard days in a row</h3>
+      <h3>${brushIcon("alert","var(--c-hiit)")} ${consec} hard days in a row</h3>
       <div class="info-note">Seven straight days drives cortisol up and testosterone down. Take the rest day, or swap today for light mobility.</div>
       <div class="btn-row" style="margin-top:12px;">
         <button class="btn ghost sm" data-act="swap-light">Swap to light mobility</button>
@@ -1000,7 +1019,7 @@ function finishCustom(w, rounds, durationSecs) {
     completed: true, durationSecs: durationSecs || 0,
   });
   save(); beepDone(); closeOverlay(); render();
-  toast(`${w.name} logged${rounds ? " · " + rounds + " rounds" : ""} · 🔥 ${workoutStreak()}d`);
+  toast(`${w.name} logged${rounds ? " · " + rounds + " rounds" : ""} · ${workoutStreak()}-day streak`);
 }
 
 function openConductor(w) {
@@ -1156,7 +1175,7 @@ function renderEquipment() {
         <h3 style="margin-top:8px;">${esc(recEq.name)}</h3>
         <div class="info-note">${esc(rec.why)}</div>
         <button class="btn mind sm" style="margin-top:12px;" data-act="toggle-eq" data-eq="${recEq.id}">I got this ✓</button>
-      </div>` : `<div class="card"><h3>Fully equipped 🏆</h3><div class="meta">Every tier unlocked. The ceiling is now you.</div></div>`}
+      </div>` : `<div class="card"><h3>${brushIcon("complete","var(--c-nutrition)")} Fully equipped</h3><div class="meta">Every tier unlocked. The ceiling is now you.</div></div>`}
     ${tiers}`;
 }
 
@@ -1320,9 +1339,9 @@ function openLocationSheet() {
   if (tpl.custom) { runCustom(tpl.custom.id); return; }
   showSheet(`
     <h3>Where are you today?</h3>
-    <button class="opt-row" data-loc="gym"><span class="o-ico">🏋️</span><span>At the gym<span class="o-sub">Full equipment — heavy compounds selected</span></span></button>
-    <button class="opt-row" data-loc="home"><span class="o-ico">🏠</span><span>Home<span class="o-sub">Your owned equipment: ${S.equipment.filter(e=>e!=="gym").map(id => (EQUIPMENT.find(q=>q.id===id)||{}).name).filter(Boolean).join(", ") || "bodyweight"}</span></span></button>
-    <button class="opt-row" data-loc="travel"><span class="o-ico">🧳</span><span>Traveling<span class="o-sub">Bodyweight only — session still fully completable</span></span></button>
+    <button class="opt-row" data-loc="gym"><span class="o-ico">${brushIcon("gym","var(--c-strength)")}</span><span>At the gym<span class="o-sub">Full equipment — heavy compounds selected</span></span></button>
+    <button class="opt-row" data-loc="home"><span class="o-ico">${brushIcon("home","var(--c-mobility)")}</span><span>Home<span class="o-sub">Your owned equipment: ${S.equipment.filter(e=>e!=="gym").map(id => (EQUIPMENT.find(q=>q.id===id)||{}).name).filter(Boolean).join(", ") || "bodyweight"}</span></span></button>
+    <button class="opt-row" data-loc="travel"><span class="o-ico">${brushIcon("travel","var(--c-mind)")}</span><span>Traveling<span class="o-sub">Bodyweight only — session still fully completable</span></span></button>
   `, sheet => {
     sheet.onclick = e => {
       const b = e.target.closest("[data-loc]");
@@ -1413,7 +1432,7 @@ function renderSlot(s, si) {
           <div class="ex-name">${esc(ex.name)}</div>
           <div class="rx">${esc(slot.target)} · ${rxStr}</div>
           ${ex.cue ? `<div class="cue">${esc(ex.cue)}</div>` : ""}
-          ${ex.power ? `<div class="power-flag">⚡ Power — full recovery between reps (${Math.max(rx.rest,120)}s enforced)</div>` : ""}
+          ${ex.power ? `<div class="power-flag">${brushIcon("bolt","var(--c-hiit)")} Power — full recovery between reps (${Math.max(rx.rest,120)}s enforced)</div>` : ""}
         </div>
         <button class="swap-btn" data-act="swap-ex" data-si="${si}">Swap</button>
       </div>
@@ -1852,7 +1871,7 @@ function openCoherence(mode) {
         markTrack(isMed ? "mind" : "breath", isMed ? {} : { breathType:"coherence" });
         pc.textContent = "Done ✓"; pc.classList.remove("inhale","exhale");
         $("#pc-start").textContent = "Again";
-        toast(isMed ? "Meditation logged 🧘" : "Coherence session logged");
+        toast(isMed ? "Meditation logged" : "Coherence session logged");
       }
     }, 250);
   };
@@ -1969,7 +1988,7 @@ function openPelvic() {
       roundEl.textContent = "3 sets done";
       startBtn.textContent = "Again";
       markTrack("pelvic");
-      beepDone(); toast("Pelvic floor logged · 🔥 " + trackStreak("pelvic") + "d");
+      beepDone(); toast("Pelvic floor logged · " + trackStreak("pelvic") + "-day streak");
       return;
     }
     let set, rep, within, dur, maxRep;
@@ -2051,7 +2070,7 @@ function openMobilityPlayer(mode) {
       $("#mb-name").textContent = "Flow complete ✓"; $("#mb-clock").textContent = "—"; $("#mb-cue").textContent = "";
       startBtn.textContent = "Again";
       markTrack("mobility");
-      beepDone(); toast("Mobility logged · 🔥 " + trackStreak("mobility") + "d");
+      beepDone(); toast("Mobility logged · " + trackStreak("mobility") + "-day streak");
       return;
     }
     let mi = 0; while (el >= bounds[mi]) mi++;
@@ -2082,10 +2101,10 @@ function openMobilityPlayer(mode) {
 function openBreathHub() {
   showSheet(`
     <h3>Breathwork</h3>
-    <button class="opt-row" data-bw="coherence"><span class="o-ico">〰️</span><span>Coherence · ${S.settings.coherenceRate} bpm<span class="o-sub">5–10 min · the daily default</span></span></button>
-    <button class="opt-row" data-bw="box"><span class="o-ico">⬜</span><span>Box breathing 4·4·4·4<span class="o-sub">Pre-lift focus / pre-sleep wind-down</span></span></button>
-    <button class="opt-row" data-bw="holds"><span class="o-ico">🚶</span><span>Breath-hold intervals<span class="o-sub">Walking protocol · 2–3× per week</span></span></button>
-    <button class="opt-row" data-bw="bolt"><span class="o-ico">⏱</span><span>BOLT test<span class="o-sub">The breathwork KPI · monthly${latestMetric("BOLT") ? ` · last: ${latestMetric("BOLT").value}s` : ""}</span></span></button>
+    <button class="opt-row" data-bw="coherence"><span class="o-ico">${brushIcon("wave","var(--c-breath)")}</span><span>Coherence · ${S.settings.coherenceRate} bpm<span class="o-sub">5–10 min · the daily default</span></span></button>
+    <button class="opt-row" data-bw="box"><span class="o-ico">${brushIcon("boxbreath","var(--c-breath)")}</span><span>Box breathing 4·4·4·4<span class="o-sub">Pre-lift focus / pre-sleep wind-down</span></span></button>
+    <button class="opt-row" data-bw="holds"><span class="o-ico">${brushIcon("walk","var(--c-breath)")}</span><span>Breath-hold intervals<span class="o-sub">Walking protocol · 2–3× per week</span></span></button>
+    <button class="opt-row" data-bw="bolt"><span class="o-ico">${brushIcon("stopwatch","var(--c-breath)")}</span><span>BOLT test<span class="o-sub">The breathwork KPI · monthly${latestMetric("BOLT") ? ` · last: ${latestMetric("BOLT").value}s` : ""}</span></span></button>
   `, sheet => {
     sheet.onclick = e => {
       const b = e.target.closest("[data-bw]"); if (!b) return;
@@ -2199,7 +2218,7 @@ $("#screen").addEventListener("click", e => {
     save(); render();
     if (!had) {
       const n = EXERCISES.filter(ex => ex.req.includes(id)).length;
-      toast(`${(EQUIPMENT.find(q=>q.id===id)||{}).name} unlocked ${n} exercise${n===1?"":"s"} 🎉`);
+      toast(`${(EQUIPMENT.find(q=>q.id===id)||{}).name} unlocked ${n} exercise${n===1?"":"s"}`);
     }
   }
   if (act === "start-deload") {
