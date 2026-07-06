@@ -309,6 +309,7 @@ function motifSVG(kind, color) {
     core:     `<path d="M16 46 Q50 34 84 46"/><path d="M16 62 Q50 50 84 62" opacity="0.45"/><path d="M48 38 Q58 52 46 66"/>`,     // obi knot
     bolt:     `<path d="M58 12 L34 52 H52 L40 88"/>`,                                                             // lightning
     pulse:    `<path d="M10 54 H30 L42 28 L56 78 L66 46 H90"/>`,                                                  // heartbeat
+    lotus:    `<path d="M50 24 Q60 42 50 60 Q40 42 50 24"/><path d="M26 40 Q32 58 50 62 Q34 60 22 50" opacity="0.6"/><path d="M74 40 Q68 58 50 62 Q66 60 78 50" opacity="0.6"/><path d="M18 64 Q34 76 50 74 Q66 76 82 64" opacity="0.4"/>`, // lotus
   };
   return `<svg class="motif" viewBox="0 0 100 100" aria-hidden="true" style="color:${color}">
     <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">${strokes[kind] || strokes.mind}</g>
@@ -491,7 +492,7 @@ function renderLibrary() {
     if (cat.practice) {
       body += PRACTICES.filter(p => p.cat === cat.id).map(p => `
         <button class="ex-card practice-card stripe ${p.color}" data-act="open-practice" data-open="${p.open}">
-          ${motifSVG(p.color, MOTIF_COLORS[p.color])}
+          ${motifSVG(p.motif || p.color, MOTIF_COLORS[p.color])}
           <div><div class="ex-title">${esc(p.name)}</div><div class="ex-sub">${esc(p.sub)}</div></div>
           <div class="ex-side"><span class="chip ${p.color} on">guided</span></div>
         </button>`).join("");
@@ -578,6 +579,8 @@ function startSingleExercise(exId) {
 
 function openPractice(key) {
   if (key === "pelvic") openPelvic();
+  else if (key === "sex_yoga") openYogaFlow();
+  else if (key === "aerobic40") openAerobicDose();
   else if (key === "coherence") openCoherence("coherence");
   else if (key === "box") openBoxBreathing();
   else if (key === "holds") openBreathHold();
@@ -2094,6 +2097,120 @@ function openMobilityPlayer(mode) {
     if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
     pausedAt = 0;
     clearInterval(int); int = setInterval(draw, 250); draw();
+  };
+}
+
+/* ---------- Stamina yoga flow (sexual health) ---------- */
+function openYogaFlow() {
+  const flow = SEX_YOGA_FLOW;
+  const ov = overlayShell(flow.label, "pelvic", `
+    <div class="card stripe pelvic">
+      <div class="meta">${esc(flow.intro)}</div>
+      <div class="meta" style="margin-top:6px; color:var(--text-3);">Skip or soften anything that pinches a knee, groin, or low back. Slow beats deep.</div>
+    </div>
+    <div class="big-timer" style="min-height:300px;">
+      <div class="phase" id="yg-name" style="color:var(--c-pelvic); font-size:1.2rem; letter-spacing:0; text-transform:none;">${esc(flow.moves[0].name)}</div>
+      <div class="clock num" id="yg-clock">${fmtClock(flow.moves[0].secs)}</div>
+      <div class="round" id="yg-cue" style="max-width:320px; line-height:1.55; font-size:0.86rem;">${esc(flow.moves[0].cue)}</div>
+      <div class="round num" id="yg-prog" style="color:var(--text-3);">1 / ${flow.moves.length}</div>
+      <button class="btn pelvic" style="max-width:240px;" id="yg-start">Begin the flow</button>
+    </div>
+    <div class="info-note note-pelvic" style="text-align:center;">Nasal breathing throughout. Hold each pose for the count shown; stay with sensation.</div>`);
+  let int = null, running = false, t0 = 0, pausedAt = 0, lastMi = -1, lastLeft = -1;
+  overlayCleanup = () => clearInterval(int);
+  const bounds = []; let total = 0;
+  flow.moves.forEach(m => { total += m.secs; bounds.push(total); });
+  const startBtn = $("#yg-start");
+  const draw = () => {
+    const el = (Date.now() - t0) / 1000;
+    if (el >= total) {
+      clearInterval(int); running = false; t0 = 0; pausedAt = 0; lastMi = -1;
+      $("#yg-name").textContent = "Flow complete ✓"; $("#yg-clock").textContent = "—";
+      $("#yg-cue").textContent = "Three doors into the same room: this flow, the daily kegels, and the aerobic dose.";
+      startBtn.textContent = "Again";
+      S.workoutLogs.push({ date: todayISO(), templateId: "sexyoga", location: "home",
+        entries: [], completed: true, durationSecs: total });
+      save();
+      beepDone(); toast("Stamina yoga logged · " + Math.round(total / 60) + " min");
+      return;
+    }
+    let mi = 0; while (el >= bounds[mi]) mi++;
+    const left = Math.ceil(bounds[mi] - el);
+    if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; }
+    if (left <= 3 && left !== lastLeft) beepLo();
+    lastLeft = left;
+    $("#yg-name").textContent = flow.moves[mi].name;
+    $("#yg-cue").textContent = flow.moves[mi].cue;
+    $("#yg-clock").textContent = fmtClock(left);
+    $("#yg-prog").textContent = (mi + 1) + " / " + flow.moves.length;
+  };
+  startBtn.onclick = () => {
+    if (running) {
+      running = false; clearInterval(int); pausedAt = Date.now();
+      $("#yg-name").textContent = "Paused — " + flow.moves[Math.max(0, lastMi)].name;
+      startBtn.textContent = "Resume";
+      return;
+    }
+    running = true; startBtn.textContent = "Pause";
+    if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
+    pausedAt = 0;
+    clearInterval(int); int = setInterval(draw, 250); draw();
+  };
+}
+
+/* ---------- Aerobic dose (sexual health — the vascular lever) ---------- */
+function openAerobicDose() {
+  const D = AEROBIC_DOSE;
+  const ov = overlayShell("Aerobic dose", "pelvic", `
+    <div class="card stripe pelvic">
+      <div class="meta">${esc(D.intro)}</div>
+      <div class="meta" style="margin-top:8px;">${D.dose.map(d => "· " + esc(d)).join("<br>")}</div>
+      <div class="meta" style="margin-top:8px;"><b style="color:var(--text);">Pick any:</b> ${esc(D.options)}</div>
+    </div>
+    <div class="big-timer" style="min-height:260px;">
+      <div class="phase" id="ad-phase" style="color:var(--c-pelvic);">40-minute session</div>
+      <div class="clock num" id="ad-clock">${fmtClock(D.minutes * 60)}</div>
+      <div class="round" id="ad-note" style="max-width:300px; line-height:1.5;">Breathing hard, conversation choppy — but not all-out.</div>
+      <div class="btn-row" style="max-width:340px; width:100%;">
+        <button class="btn pelvic" id="ad-start">Start</button>
+        <button class="btn ghost" id="ad-finish">Finish & log</button>
+      </div>
+    </div>
+    <div class="info-note note-pelvic" style="text-align:center;">${esc(D.mapping)}</div>`);
+  let int = null, running = false, t0 = 0, pausedAt = 0, done = false;
+  overlayCleanup = () => clearInterval(int);
+  const totalSecs = D.minutes * 60;
+  const startBtn = $("#ad-start");
+  const tick = () => {
+    const el = (Date.now() - t0) / 1000;
+    const left = totalSecs - el;
+    if (left <= 0) {
+      clearInterval(int); running = false;
+      $("#ad-clock").textContent = "0:00";
+      $("#ad-phase").textContent = "Dose complete";
+      $("#ad-note").textContent = "That's one of your four weekly touches. Finish & log it.";
+      if (!done) { done = true; beepDone(); }
+      return;
+    }
+    $("#ad-clock").textContent = fmtClock(Math.ceil(left));
+  };
+  startBtn.onclick = () => {
+    if (running) { running = false; clearInterval(int); pausedAt = Date.now(); startBtn.textContent = "Resume"; return; }
+    running = true; startBtn.textContent = "Pause";
+    if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
+    pausedAt = 0;
+    clearInterval(int); int = setInterval(tick, 500); tick();
+  };
+  $("#ad-finish").onclick = () => {
+    clearInterval(int);
+    const el = t0 ? Math.round(Math.min(totalSecs, (pausedAt || Date.now()) - t0) / 1000) : 0;
+    if (el >= 60) {
+      S.workoutLogs.push({ date: todayISO(), templateId: "aerobic40", location: "home",
+        entries: [], completed: true, durationSecs: el });
+      save();
+      toast("Aerobic session logged · " + Math.round(el / 60) + " min");
+    }
+    closeOverlay(); render();
   };
 }
 

@@ -247,7 +247,7 @@ const CATEGORIES = [
   { id:"core",    label:"Core",           patterns:["CORE","CARRY"],                        color:"pelvic" },
   { id:"power",   label:"Power & speed",  patterns:["PLYO","REACTION"],                     color:"hiit" },
   { id:"cardio",  label:"Conditioning",   patterns:["CARDIO"],                              color:"hiit" },
-  { id:"pelvic",  label:"Pelvic floor",   practice:"pelvic",                                color:"pelvic" },
+  { id:"pelvic",  label:"Sexual health",  practice:"pelvic",                                color:"pelvic" },
   { id:"breath",  label:"Breathwork",     practice:"breath",                                color:"breath" },
   { id:"mobility",label:"Mobility",       practice:"mobility",                              color:"mobility" },
   { id:"mind",    label:"Meditation",     practice:"mind",                                  color:"mind" },
@@ -255,7 +255,9 @@ const CATEGORIES = [
 
 /* Guided practices shown in the Library alongside exercises */
 const PRACTICES = [
-  { id:"pf_session",  cat:"pelvic",   name:"Pelvic floor session",  sub:"3 sets · slow holds + quick flicks · ~4 min", color:"pelvic",   open:"pelvic" },
+  { id:"pf_session",  cat:"pelvic",   name:"Pelvic floor session",  sub:"Daily kegels · slow holds + quick flicks · ~4 min", color:"pelvic",   open:"pelvic", motif:"pelvic" },
+  { id:"sex_yoga",    cat:"pelvic",   name:"Stamina yoga flow",     sub:"8 poses · ~16 min · pelvic control, blood flow, awareness", color:"pelvic", open:"sex_yoga", motif:"lotus" },
+  { id:"aerobic40",   cat:"pelvic",   name:"Aerobic dose · 40 min", sub:"Moderate cardio · 4×/week · the vascular lever", color:"pelvic", open:"aerobic40", motif:"pulse" },
   { id:"coherence",   cat:"breath",   name:"Coherence breathing",   sub:"5s in / 5s out · the daily default",          color:"breath",   open:"coherence" },
   { id:"box",         cat:"breath",   name:"Box breathing",         sub:"4·4·4·4 · pre-lift focus / wind-down",        color:"breath",   open:"box" },
   { id:"holds",       cat:"breath",   name:"Breath-hold walk",      sub:"Exhale-hold intervals · 2–3× a week",         color:"breath",   open:"holds" },
@@ -379,4 +381,34 @@ const PATTERN_EXPLAIN = {
   REACTION:"react fast to something unpredictable",
   MOBILITY:"stretching and moving joints through full range",
   BREATH_HOLD:"controlled breath holds that build CO2 tolerance",
+};
+
+/* Sexual-stamina yoga flow — sequenced pose player.
+   Mechanisms: pelvic/perineal control, parasympathetic tone, pelvic blood flow,
+   and body awareness (noticing the point of no return early enough to manage it). */
+const SEX_YOGA_FLOW = {
+  label: "Stamina yoga flow",
+  intro: "The muscular and neural side of sexual stamina. Move slowly, breathe through the nose, and stay with sensation rather than analyzing it. In one trial this style of practice beat medication on ejaculatory control.",
+  moves: [
+    { name:"Easy seat — slow breathing",            secs:120, cue:"Cross-legged, spine tall, hands on knees. Belly breaths at 5 s in / 5 s out — this sets the calm everything else builds on." },
+    { name:"Butterfly (Baddha Konasana)",           secs:90,  cue:"Soles of the feet together, heels drawn toward you, spine long. Let the knees release down — extending the inner thighs outward is the goal, not touching the floor." },
+    { name:"Wide-angle fold (Upavistha Konasana)",  secs:60,  cue:"Legs out in a wide V, sit tall, hinge forward from the hips — not the waist. Back off the moment the low back rounds hard." },
+    { name:"Seated forward fold (Paschimottanasana)", secs:60, cue:"Legs together, inhale tall, exhale and fold from the hips, chest leading toward the thighs. Bend the knees a little if the hamstrings bite. Calming by design." },
+    { name:"Cobra — round 1",                       secs:40,  cue:"Face down, palms beside the lower ribs. Press the tops of the feet down and roll the chest up — lead with the chest, elbows hugged in, glutes relaxed." },
+    { name:"Cobra — round 2",                       secs:40,  cue:"One breath of rest, then the same wave up. This front-opener stimulates the abdominal and pelvic organs after the folds." },
+    { name:"Bridge — hold 1 of 3",                  secs:30,  cue:"On your back, feet flat and close to the hips. Press up, and at the top squeeze and lift the pelvic floor — the same engagement as your kegels — while breathing steadily." },
+    { name:"Bridge — hold 2 of 3",                  secs:30,  cue:"Lower with control, lift again. This is where the sequence trains the pelvic muscles under load." },
+    { name:"Bridge — hold 3 of 3",                  secs:30,  cue:"Last round. Steady breath, pelvic floor engaged the whole hold." },
+    { name:"Legs up the wall (Viparita Karani)",    secs:150, cue:"Hips near the wall, legs straight up it, arms relaxed. The gentle inversion returns blood to the pelvis and shifts you toward rest-and-recover." },
+    { name:"Savasana — awareness scan",             secs:150, cue:"Lie flat, fully relaxed. Move attention slowly through the pelvis and belly — not to do anything, just to feel clearly. The finer you can feel the building charge, the earlier you can manage it." },
+  ],
+};
+
+/* Aerobic prescription for erectile/vascular health (the strongest evidence) */
+const AEROBIC_DOSE = {
+  minutes: 40,
+  intro: "An erection is a circulatory event — aerobic work is the vascular lever, and in the meta-analyses it rivals medication for many men. The dose the trials converge on:",
+  dose: ["~40 minutes per session", "Moderate-to-vigorous — breathing hard, conversation choppy", "4 sessions per week (~160 min minimum; more is better)", "Judge the full effect at ~6 months"],
+  options: "Brisk or incline walking · jogging · cycling (well-fitted saddle) · rowing · swimming · HIIT",
+  mapping: "You're already close: Day 2 HIIT + Day 4 nasal walk + Day 6 conditioning = three touches. This timer is the fourth — an easy 40 on any other day.",
 };
