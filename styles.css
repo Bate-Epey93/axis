@@ -219,6 +219,24 @@ h1,h2,h3 { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Se
 .swap-btn { color: var(--text-3); font-size: 0.78rem; font-weight: 700; padding: 4px 8px; border-radius: 8px; background: var(--surface-2); flex:none; }
 
 .power-flag { display:inline-flex; align-items:center; gap:5px; font-size: 0.72rem; font-weight: 800; color: var(--c-hiit); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 6px; }
+.cue { color: var(--text-3); font-size: 0.78rem; line-height: 1.45; margin-top: 4px; }
+
+/* load picker */
+.load-btn {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-s);
+  padding: 10px 6px; min-height: 44px; width: 100%; text-align: center; font-weight: 700;
+  font-size: 0.85rem; color: var(--text); font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.load-btn.empty { color: var(--text-3); font-weight: 500; }
+.band-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.band-chip { padding: 11px 15px; border-radius: 10px; font-weight: 800; font-size: 0.85rem; color: #0A0A0B; }
+.band-chip.yellow { background: #FFD60A; }
+.band-chip.red    { background: #FF453A; }
+.band-chip.green  { background: #30DB5B; }
+.band-chip.blue   { background: #5E9CF5; }
+.band-chip.black  { background: #3A3A3E; color: #F2F2F7; border: 1px solid var(--line); }
+.band-chip.bw     { background: var(--surface-3); color: var(--text); }
 
 /* rest timer bar */
 #restbar {

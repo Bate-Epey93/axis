@@ -37,3 +37,6 @@ All data lives in `localStorage` on the device — private, local-only. "Reset a
 - **Restraint:** 6 hard days in a row triggers a warning + one-tap swap to light mobility; deload (−40% volume) is prompted every ~5 weeks and auto-applied to prescriptions.
 - **Weeks 1–2 ramp:** plyo/reaction slots hidden until week 3.
 - **Equipment tiers:** toggle "I got this" and the exercise pool expands instantly; a next-buy recommendation points at your current ceiling.
+- **Weeks 1–2 ramp:** the week itself runs as 3 form-focused strength days + 1 HIIT + light days; the full split takes over in week 3.
+- **Timers are wall-clock based** and hold a screen wake lock — locking the phone mid-rest can't desync an interval.
+- **Backup:** Recovery tab → Export/Import a JSON backup. Data is localStorage-only; export monthly (the app reminds you) and use import to move between devices.

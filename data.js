@@ -24,84 +24,88 @@ const EQUIPMENT = [
 const TIER_NAMES = { 1: "Foundation", 2: "Expanded", 3: "Equipped", 4: "Athlete" };
 const TIER_COST  = { 1: "Owned", 2: "Low cost", 3: "Medium cost", 4: "Higher cost" };
 
+/* Band progression order, lightest → heaviest (used for load picker + progression hints) */
+const BAND_ORDER = ["yellow", "red", "green", "blue", "black"];
+
 /* Exercise library.
    req: equipment needed (empty = bodyweight). priority: higher wins when eligible.
+   cue: one-line form focus, shown in the session player.
    ladder: progression steps surfaced when the user maxes the rep range. */
 const EXERCISES = [
   // ---- SQUAT ----
-  { id:"bb_back_squat",  name:"Barbell back squat",    pattern:"SQUAT", req:["gym"], priority:100, power:false, ladder:["+1–2 reps","+2.5–5 kg","−15 s rest"] },
-  { id:"goblet_squat",   name:"Goblet squat",          pattern:"SQUAT", req:["dumbbells"], priority:80, power:false, ladder:["+reps","heavier bell","pause at bottom"] },
-  { id:"kb_front_squat", name:"KB front squat",        pattern:"SQUAT", req:["kettlebell"], priority:78, power:false, ladder:["+reps","double-rack","tempo 3-1-1"] },
-  { id:"band_squat",     name:"Band front squat",      pattern:"SQUAT", req:["band"], priority:60, power:false, ladder:["+reps","slower eccentric","thicker band","1.5-rep squats"] },
-  { id:"bw_squat",       name:"Bodyweight squat",      pattern:"SQUAT", req:[], priority:30, power:false, ladder:["+reps","tempo 3-1-1","pause squat","pistol progression"] },
-  { id:"pistol_prog",    name:"Pistol squat progression", pattern:"SQUAT", req:[], priority:35, power:false, ladder:["box pistol","assisted pistol","full pistol"] },
+  { id:"bb_back_squat",  name:"Barbell back squat",    pattern:"SQUAT", req:["gym"], priority:100, power:false, cue:"Brace before you descend; knees track over toes; drive the floor apart.", ladder:["+1–2 reps","+2.5–5 kg","−15 s rest"] },
+  { id:"goblet_squat",   name:"Goblet squat",          pattern:"SQUAT", req:["dumbbells"], priority:80, power:false, cue:"Bell tight to chest, elbows inside knees at the bottom, chest tall.", ladder:["+reps","heavier bell","pause at bottom"] },
+  { id:"kb_front_squat", name:"KB front squat",        pattern:"SQUAT", req:["kettlebell"], priority:78, power:false, cue:"Rack the bell, ribs down, sit between your heels.", ladder:["+reps","double-rack","tempo 3-1-1"] },
+  { id:"band_squat",     name:"Band front squat",      pattern:"SQUAT", req:["band"], priority:60, power:false, cue:"Stand on the band, hold at shoulders; fight the band on the way up.", ladder:["+reps","slower eccentric","thicker band","1.5-rep squats"] },
+  { id:"bw_squat",       name:"Bodyweight squat",      pattern:"SQUAT", req:[], priority:30, power:false, cue:"Full depth, heels down, control the descent — 3 s down, 1 s up.", ladder:["+reps","tempo 3-1-1","pause squat","pistol progression"] },
+  { id:"pistol_prog",    name:"Pistol squat progression", pattern:"SQUAT", req:[], priority:35, power:false, cue:"Free leg straight out front; sit back slow; use a box until you own it.", ladder:["box pistol","assisted pistol","full pistol"] },
   // ---- HINGE ----
-  { id:"bb_rdl",         name:"Romanian deadlift (barbell)", pattern:"HINGE", req:["gym"], priority:100, power:false, ladder:["+1–2 reps","+2.5–5 kg","−15 s rest"] },
-  { id:"bb_deadlift",    name:"Conventional deadlift", pattern:"HINGE", req:["gym"], priority:95, power:false, ladder:["+reps","+load"] },
-  { id:"kb_swing",       name:"Kettlebell swing",      pattern:"HINGE", req:["kettlebell"], priority:82, power:true, ladder:["+reps","heavier bell","one-arm swing"] },
-  { id:"db_rdl",         name:"Dumbbell RDL",          pattern:"HINGE", req:["dumbbells"], priority:80, power:false, ladder:["+reps","heavier","single-leg"] },
-  { id:"band_rdl",       name:"Band Romanian deadlift", pattern:"HINGE", req:["band"], priority:60, power:false, ladder:["+reps","slow eccentric","thicker band","single-leg band RDL"] },
-  { id:"band_gm",        name:"Band good-morning",     pattern:"HINGE", req:["band"], priority:55, power:false, ladder:["+reps","tempo","thicker band"] },
-  { id:"sl_rdl_bw",      name:"Single-leg RDL (bodyweight)", pattern:"HINGE", req:[], priority:30, power:false, ladder:["+reps","eyes-closed balance","add load when available"] },
+  { id:"bb_rdl",         name:"Romanian deadlift (barbell)", pattern:"HINGE", req:["gym"], priority:100, power:false, cue:"Push hips back, soft knees, bar drags the thighs; stop at hamstring stretch.", ladder:["+1–2 reps","+2.5–5 kg","−15 s rest"] },
+  { id:"bb_deadlift",    name:"Conventional deadlift", pattern:"HINGE", req:["gym"], priority:95, power:false, cue:"Wedge in, slack out of the bar, push the floor away — never round under load.", ladder:["+reps","+load"] },
+  { id:"kb_swing",       name:"Kettlebell swing",      pattern:"HINGE", req:["kettlebell"], priority:82, power:true, cue:"Snap the hips; the arms are ropes. Bell floats, glutes finish.", ladder:["+reps","heavier bell","one-arm swing"] },
+  { id:"db_rdl",         name:"Dumbbell RDL",          pattern:"HINGE", req:["dumbbells"], priority:80, power:false, cue:"Hips back until hamstrings load; flat back, bells close to the legs.", ladder:["+reps","heavier","single-leg"] },
+  { id:"band_rdl",       name:"Band Romanian deadlift", pattern:"HINGE", req:["band"], priority:60, power:false, cue:"Stand on the band, hinge back; squeeze glutes hard at lockout.", ladder:["+reps","slow eccentric","thicker band","single-leg band RDL"] },
+  { id:"band_gm",        name:"Band good-morning",     pattern:"HINGE", req:["band"], priority:55, power:false, cue:"Band across shoulders, hinge until torso ~45°, drive hips through.", ladder:["+reps","tempo","thicker band"] },
+  { id:"sl_rdl_bw",      name:"Single-leg RDL (bodyweight)", pattern:"HINGE", req:[], priority:30, power:false, cue:"Square hips, reach long, back leg and torso move as one lever.", ladder:["+reps","eyes-closed balance","add load when available"] },
   // ---- LUNGE ----
-  { id:"bb_lunge",       name:"Barbell walking lunge", pattern:"LUNGE", req:["gym"], priority:90, power:false, ladder:["+reps","+load"] },
-  { id:"db_split_squat", name:"DB Bulgarian split squat", pattern:"LUNGE", req:["dumbbells"], priority:85, power:false, ladder:["+reps","heavier","front-foot elevated"] },
-  { id:"bw_split_squat", name:"Bulgarian split squat", pattern:"LUNGE", req:[], priority:50, power:false, ladder:["+reps","tempo 3-1-1","deficit","add load"] },
-  { id:"walking_lunge",  name:"Walking lunge",         pattern:"LUNGE", req:[], priority:40, power:false, ladder:["+reps","jump lunge (week 3+)"] },
+  { id:"bb_lunge",       name:"Barbell walking lunge", pattern:"LUNGE", req:["gym"], priority:90, power:false, cue:"Long step, torso tall, back knee kisses the floor.", ladder:["+reps","+load"] },
+  { id:"db_split_squat", name:"DB Bulgarian split squat", pattern:"LUNGE", req:["dumbbells","bench"], priority:85, power:false, cue:"Rear foot up, front shin vertical, drop straight down.", ladder:["+reps","heavier","front-foot elevated"] },
+  { id:"bw_split_squat", name:"Bulgarian split squat", pattern:"LUNGE", req:[], priority:50, power:false, cue:"Rear foot on a chair; front heel takes the weight; slow eccentric.", ladder:["+reps","tempo 3-1-1","deficit","add load"] },
+  { id:"walking_lunge",  name:"Walking lunge",         pattern:"LUNGE", req:[], priority:40, power:false, cue:"Knee tracks the toes; push through the front heel to stand.", ladder:["+reps","jump lunge (week 3+)"] },
   // ---- HORIZONTAL PUSH ----
-  { id:"bb_bench",       name:"Barbell bench press",   pattern:"H_PUSH", req:["gym"], priority:100, power:false, ladder:["+1–2 reps","+2.5 kg","−15 s rest"] },
-  { id:"db_bench",       name:"DB bench press",        pattern:"H_PUSH", req:["dumbbells","bench"], priority:88, power:false, ladder:["+reps","heavier"] },
-  { id:"ring_pushup",    name:"Ring push-up",          pattern:"H_PUSH", req:["rings"], priority:70, power:false, ladder:["+reps","feet elevated","ring dip"] },
-  { id:"band_pushup",    name:"Band-resisted push-up", pattern:"H_PUSH", req:["band"], priority:60, power:false, ladder:["+reps","slower eccentric","thicker band","archer push-up"] },
-  { id:"pushup",         name:"Push-up",               pattern:"H_PUSH", req:[], priority:40, power:false, ladder:["+reps","tempo","decline","archer","one-arm progression"] },
+  { id:"bb_bench",       name:"Barbell bench press",   pattern:"H_PUSH", req:["gym"], priority:100, power:false, cue:"Shoulder blades pinned, feet planted, bar to lower chest, press to lockout.", ladder:["+1–2 reps","+2.5 kg","−15 s rest"] },
+  { id:"db_bench",       name:"DB bench press",        pattern:"H_PUSH", req:["dumbbells","bench"], priority:88, power:false, cue:"Bells over elbows the whole path; slight arc in, no clanging at the top.", ladder:["+reps","heavier"] },
+  { id:"ring_pushup",    name:"Ring push-up",          pattern:"H_PUSH", req:["rings"], priority:70, power:false, cue:"Rings turned out at top, body a rigid plank; own the wobble.", ladder:["+reps","feet elevated","ring dip"] },
+  { id:"band_pushup",    name:"Band-resisted push-up", pattern:"H_PUSH", req:["band"], priority:60, power:false, cue:"Band across the back, hands anchor it; full range, hips locked.", ladder:["+reps","slower eccentric","thicker band","archer push-up"] },
+  { id:"pushup",         name:"Push-up",               pattern:"H_PUSH", req:[], priority:40, power:false, cue:"One straight line ear-to-ankle; chest to floor; elbows ~45°.", ladder:["+reps","tempo","decline","archer","one-arm progression"] },
   // ---- VERTICAL PUSH ----
-  { id:"bb_ohp",         name:"Overhead press (barbell)", pattern:"V_PUSH", req:["gym"], priority:100, power:false, ladder:["+reps","+2.5 kg"] },
-  { id:"db_ohp",         name:"DB shoulder press",     pattern:"V_PUSH", req:["dumbbells"], priority:85, power:false, ladder:["+reps","heavier","single-arm"] },
-  { id:"band_ohp",       name:"Band overhead press",   pattern:"V_PUSH", req:["band"], priority:60, power:false, ladder:["+reps","tempo","thicker band","single-arm"] },
-  { id:"pike_pushup",    name:"Pike push-up",          pattern:"V_PUSH", req:[], priority:40, power:false, ladder:["+reps","feet elevated","wall handstand push-up progression"] },
+  { id:"bb_ohp",         name:"Overhead press (barbell)", pattern:"V_PUSH", req:["gym"], priority:100, power:false, cue:"Squeeze glutes, ribs down, press through and shrug tall at lockout.", ladder:["+reps","+2.5 kg"] },
+  { id:"db_ohp",         name:"DB shoulder press",     pattern:"V_PUSH", req:["dumbbells"], priority:85, power:false, cue:"Forearms vertical, no back lean; lock out over the ears.", ladder:["+reps","heavier","single-arm"] },
+  { id:"band_ohp",       name:"Band overhead press",   pattern:"V_PUSH", req:["band"], priority:60, power:false, cue:"Stand on the band; press strict — the band punishes momentum anyway.", ladder:["+reps","tempo","thicker band","single-arm"] },
+  { id:"pike_pushup",    name:"Pike push-up",          pattern:"V_PUSH", req:[], priority:40, power:false, cue:"Hips high like a down-dog; head travels toward the floor between hands.", ladder:["+reps","feet elevated","wall handstand push-up progression"] },
   // ---- HORIZONTAL PULL ----
-  { id:"bb_row",         name:"Barbell row",           pattern:"H_PULL", req:["gym"], priority:100, power:false, ladder:["+reps","+load"] },
-  { id:"cable_row",      name:"Seated cable row",      pattern:"H_PULL", req:["gym"], priority:90, power:false, ladder:["+reps","+load"] },
-  { id:"ring_row",       name:"Ring row",              pattern:"H_PULL", req:["rings"], priority:75, power:false, ladder:["+reps","feet elevated","archer row"] },
-  { id:"band_row",       name:"Band row",              pattern:"H_PULL", req:["band"], priority:60, power:false, ladder:["+reps","slow eccentric","thicker band","single-arm row"] },
-  { id:"table_row",      name:"Inverted row (table/edge)", pattern:"H_PULL", req:[], priority:30, power:false, ladder:["+reps","feet elevated"] },
+  { id:"bb_row",         name:"Barbell row",           pattern:"H_PULL", req:["gym"], priority:100, power:false, cue:"Hinge ~45°, pull to the belt line, no torso heave.", ladder:["+reps","+load"] },
+  { id:"cable_row",      name:"Seated cable row",      pattern:"H_PULL", req:["gym"], priority:90, power:false, cue:"Chest up, drive elbows back, squeeze the blades — don't lean back.", ladder:["+reps","+load"] },
+  { id:"ring_row",       name:"Ring row",              pattern:"H_PULL", req:["rings"], priority:75, power:false, cue:"Rigid plank, pull rings to ribs; walk feet forward to make it harder.", ladder:["+reps","feet elevated","archer row"] },
+  { id:"band_row",       name:"Band row",              pattern:"H_PULL", req:["band"], priority:60, power:false, cue:"Anchor at chest height; pull to ribs, pause 1 s, resist the return.", ladder:["+reps","slow eccentric","thicker band","single-arm row"] },
+  { id:"table_row",      name:"Inverted row (table/edge)", pattern:"H_PULL", req:[], priority:30, power:false, cue:"Under a sturdy table, body straight, chest to the edge.", ladder:["+reps","feet elevated"] },
   // ---- VERTICAL PULL ----
-  { id:"pullup_gym",     name:"Pull-up / lat pulldown", pattern:"V_PULL", req:["gym"], priority:100, power:false, ladder:["+reps","+load / weighted"] },
-  { id:"pullup_home",    name:"Pull-up (home bar)",    pattern:"V_PULL", req:["pullup_bar"], priority:90, power:false, ladder:["negatives","band-assisted","full","+reps","weighted (vest)"] },
-  { id:"band_pulldown",  name:"Band lat pulldown",     pattern:"V_PULL", req:["band"], priority:60, power:false, ladder:["+reps","tempo","thicker band","single-arm"] },
-  { id:"band_pullapart", name:"Band pull-apart",       pattern:"V_PULL", req:["band"], priority:40, power:false, ladder:["+reps","thicker band"] },
-  { id:"prone_pull",     name:"Prone Y-W-T raise",     pattern:"V_PULL", req:[], priority:20, power:false, ladder:["+reps","add 3 s holds"] },
+  { id:"pullup_gym",     name:"Pull-up / lat pulldown", pattern:"V_PULL", req:["gym"], priority:100, power:false, cue:"Dead hang to chin-over — full range beats extra reps. Pulldown: to collarbone.", ladder:["+reps","+load / weighted"] },
+  { id:"pullup_home",    name:"Pull-up (home bar)",    pattern:"V_PULL", req:["pullup_bar"], priority:90, power:false, cue:"Shoulders down first, then pull; slow 3–5 s negatives build the strength.", ladder:["negatives","band-assisted","full","+reps","weighted (vest)"] },
+  { id:"band_pulldown",  name:"Band lat pulldown",     pattern:"V_PULL", req:["band"], priority:60, power:false, cue:"Anchor high; pull elbows to ribs, feel the lats, not the arms.", ladder:["+reps","tempo","thicker band","single-arm"] },
+  { id:"band_pullapart", name:"Band pull-apart",       pattern:"V_PULL", req:["band"], priority:40, power:false, cue:"Arms straight, band to chest, squeeze the blades together.", ladder:["+reps","thicker band"] },
+  { id:"prone_pull",     name:"Prone Y-W-T raise",     pattern:"V_PULL", req:[], priority:20, power:false, cue:"Face down, thumbs up, lift from the mid-back — small range, big squeeze.", ladder:["+reps","add 3 s holds"] },
   // ---- CORE ----
-  { id:"cable_crunch",   name:"Cable crunch",          pattern:"CORE", req:["gym"], priority:85, power:false, ladder:["+reps","+load"] },
-  { id:"ab_wheel",       name:"Ab wheel rollout",      pattern:"CORE", req:["gym"], priority:80, power:false, ladder:["+reps","standing rollout"] },
-  { id:"band_pallof",    name:"Band Pallof press",     pattern:"CORE", req:["band"], priority:65, power:false, ladder:["+reps","longer hold","thicker band","half-kneeling"] },
-  { id:"hollow_hold",    name:"Hollow-body hold",      pattern:"CORE", req:[], priority:55, power:false, ladder:["+10 s","rocks","V-up"] },
-  { id:"plank",          name:"Plank",                 pattern:"CORE", req:[], priority:45, power:false, ladder:["+15 s","side plank","weighted / feet elevated"] },
-  { id:"deadbug",        name:"Dead bug",              pattern:"CORE", req:[], priority:40, power:false, ladder:["+reps","band-resisted","slower tempo"] },
-  { id:"leg_raise",      name:"Lying leg raise",       pattern:"CORE", req:[], priority:42, power:false, ladder:["+reps","hanging (bar)","toes-to-bar progression"] },
+  { id:"cable_crunch",   name:"Cable crunch",          pattern:"CORE", req:["gym"], priority:85, power:false, cue:"Hips still; crunch ribs to pelvis, exhale hard at the bottom.", ladder:["+reps","+load"] },
+  { id:"ab_wheel",       name:"Ab wheel rollout",      pattern:"CORE", req:["gym"], priority:80, power:false, cue:"Tuck the pelvis, roll only as far as the low back stays flat.", ladder:["+reps","standing rollout"] },
+  { id:"band_pallof",    name:"Band Pallof press",     pattern:"CORE", req:["band"], priority:65, power:false, cue:"Press out, resist the twist; ribs stacked over hips.", ladder:["+reps","longer hold","thicker band","half-kneeling"] },
+  { id:"hollow_hold",    name:"Hollow-body hold",      pattern:"CORE", req:[], priority:55, power:false, cue:"Low back glued to floor; arms and legs long; breathe shallow, stay rigid.", ladder:["+10 s","rocks","V-up"] },
+  { id:"plank",          name:"Plank",                 pattern:"CORE", req:[], priority:45, power:false, cue:"Squeeze glutes, tuck pelvis, push the floor away — a plank is active.", ladder:["+15 s","side plank","weighted / feet elevated"] },
+  { id:"deadbug",        name:"Dead bug",              pattern:"CORE", req:[], priority:40, power:false, cue:"Opposite arm/leg lower slow; low back never leaves the floor.", ladder:["+reps","band-resisted","slower tempo"] },
+  { id:"leg_raise",      name:"Lying leg raise",       pattern:"CORE", req:[], priority:42, power:false, cue:"Legs straight, lower slow, pelvis tucks at the top of each rep.", ladder:["+reps","hanging (bar)","toes-to-bar progression"] },
   // ---- CARRY ----
-  { id:"farmer_gym",     name:"Farmer's carry (gym)",  pattern:"CARRY", req:["gym"], priority:90, power:false, ladder:["+distance","+load"] },
-  { id:"kb_carry",       name:"Suitcase carry (KB)",   pattern:"CARRY", req:["kettlebell"], priority:80, power:false, ladder:["+distance","heavier","overhead carry"] },
-  { id:"bw_carry",       name:"Loaded carry (backpack/any)", pattern:"CARRY", req:[], priority:30, power:false, ladder:["+distance","heavier pack"] },
+  { id:"farmer_gym",     name:"Farmer's carry (gym)",  pattern:"CARRY", req:["gym"], priority:90, power:false, cue:"Heavy in both hands, tall posture, quick small steps, no lean.", ladder:["+distance","+load"] },
+  { id:"kb_carry",       name:"Suitcase carry (KB)",   pattern:"CARRY", req:["kettlebell"], priority:80, power:false, cue:"One side loaded; stay dead level — the obliques do the work.", ladder:["+distance","heavier","overhead carry"] },
+  { id:"bw_carry",       name:"Loaded carry (backpack/any)", pattern:"CARRY", req:[], priority:30, power:false, cue:"Load a backpack or bags; walk tall, shoulders packed.", ladder:["+distance","heavier pack"] },
   // ---- PLYO / POWER ----
-  { id:"box_jump",       name:"Box jump",              pattern:"PLYO", req:["plyo_box"], priority:90, power:true, ladder:["+height","depth drop"] },
-  { id:"jump_squat",     name:"Jump squat",            pattern:"PLYO", req:[], priority:60, power:true, ladder:["+reps","tuck jump","weighted (vest)"] },
-  { id:"broad_jump",     name:"Broad jump",            pattern:"PLYO", req:[], priority:55, power:true, ladder:["+distance","consecutive jumps"] },
-  { id:"plyo_pushup",    name:"Plyo push-up",          pattern:"PLYO", req:[], priority:50, power:true, ladder:["hands-leave-floor","clap push-up"] },
-  { id:"skater_bound",   name:"Lateral skater bound",  pattern:"PLYO", req:[], priority:52, power:true, ladder:["+distance","stick the landing 2 s"] },
+  { id:"box_jump",       name:"Box jump",              pattern:"PLYO", req:["plyo_box"], priority:90, power:true, cue:"Land soft and quiet, hips back; step down, never jump down.", ladder:["+height","depth drop"] },
+  { id:"jump_squat",     name:"Jump squat",            pattern:"PLYO", req:[], priority:60, power:true, cue:"Max intent every rep; land like a ninja, reset, repeat. Quality over count.", ladder:["+reps","tuck jump","weighted (vest)"] },
+  { id:"broad_jump",     name:"Broad jump",            pattern:"PLYO", req:[], priority:55, power:true, cue:"Big arm swing, explode forward, stick the landing for 2 s.", ladder:["+distance","consecutive jumps"] },
+  { id:"plyo_pushup",    name:"Plyo push-up",          pattern:"PLYO", req:[], priority:50, power:true, cue:"Push hard enough that hands leave the floor; catch soft, elbows loaded.", ladder:["hands-leave-floor","clap push-up"] },
+  { id:"skater_bound",   name:"Lateral skater bound",  pattern:"PLYO", req:[], priority:52, power:true, cue:"Bound sideways, stick one-leg landing, hold 2 s before the next.", ladder:["+distance","stick the landing 2 s"] },
   // ---- CARDIO / CONDITIONING ----
-  { id:"rope_intervals", name:"Jump-rope intervals",   pattern:"CARDIO", req:["jump_rope"], priority:80, power:false, ladder:["+work time","double-unders"] },
-  { id:"bike_sprint",    name:"Bike / rower sprints",  pattern:"CARDIO", req:["gym"], priority:85, power:false, ladder:["+watts","+rounds"] },
-  { id:"hill_sprint",    name:"Sprint intervals (outdoor)", pattern:"CARDIO", req:[], priority:60, power:false, ladder:["+rounds","hill grade"] },
-  { id:"burpee",         name:"Burpees",               pattern:"CARDIO", req:[], priority:50, power:false, ladder:["+reps per round","burpee + tuck jump"] },
-  { id:"mountain_climber",name:"Mountain climbers",    pattern:"CARDIO", req:[], priority:45, power:false, ladder:["+work time","cross-body"] },
-  { id:"high_knees",     name:"High knees",            pattern:"CARDIO", req:[], priority:40, power:false, ladder:["+work time"] },
-  { id:"shadowbox",      name:"Shadowboxing rounds",   pattern:"CARDIO", req:[], priority:48, power:false, ladder:["+rounds","add level changes"] },
+  { id:"rope_intervals", name:"Jump-rope intervals",   pattern:"CARDIO", req:["jump_rope"], priority:80, power:false, cue:"Wrists spin the rope, jumps stay low; breathe through the nose on recovery.", ladder:["+work time","double-unders"] },
+  { id:"bike_sprint",    name:"Bike / rower sprints",  pattern:"CARDIO", req:["gym"], priority:85, power:false, cue:"Work interval = talk-impossible. If you can speak, go harder.", ladder:["+watts","+rounds"] },
+  { id:"hill_sprint",    name:"Sprint intervals (outdoor)", pattern:"CARDIO", req:[], priority:60, power:false, cue:"Tall posture, drive the arms; walk back down as your recovery.", ladder:["+rounds","hill grade"] },
+  { id:"burpee",         name:"Burpees",               pattern:"CARDIO", req:[], priority:50, power:false, cue:"Chest to floor, full hip extension at the top; find a rhythm.", ladder:["+reps per round","burpee + tuck jump"] },
+  { id:"mountain_climber",name:"Mountain climbers",    pattern:"CARDIO", req:[], priority:45, power:false, cue:"Hips low, hands stacked under shoulders, drive knees fast.", ladder:["+work time","cross-body"] },
+  { id:"high_knees",     name:"High knees",            pattern:"CARDIO", req:[], priority:40, power:false, cue:"Knees to hip height, stay on the balls of the feet, pump the arms.", ladder:["+work time"] },
+  { id:"shadowbox",      name:"Shadowboxing rounds",   pattern:"CARDIO", req:[], priority:48, power:false, cue:"Move your feet, snap punches back fast, breathe out on every strike.", ladder:["+rounds","add level changes"] },
   // ---- REACTION ----
-  { id:"reaction_ball_dr",name:"Reaction-ball drops",  pattern:"REACTION", req:["reaction_ball"], priority:85, power:false, ladder:["single-hand catch","off-wall"] },
-  { id:"ladder_drill",   name:"Agility-ladder drills", pattern:"REACTION", req:["agility_ladder"], priority:80, power:false, ladder:["new patterns","faster"] },
-  { id:"wall_ball_catch",name:"Wall-ball reaction catch", pattern:"REACTION", req:[], priority:50, power:false, ladder:["closer to wall","single hand","eyes-closed start"] },
-  { id:"light_switch",   name:"Random-cue directional sprints", pattern:"REACTION", req:[], priority:45, power:false, ladder:["shorter cue gap"] },
+  { id:"reaction_ball_dr",name:"Reaction-ball drops",  pattern:"REACTION", req:["reaction_ball"], priority:85, power:false, cue:"Drop, react to the bounce, catch low — athletic stance throughout.", ladder:["single-hand catch","off-wall"] },
+  { id:"ladder_drill",   name:"Agility-ladder drills", pattern:"REACTION", req:["agility_ladder"], priority:80, power:false, cue:"Eyes forward, not down; speed comes after the pattern is clean.", ladder:["new patterns","faster"] },
+  { id:"wall_ball_catch",name:"Wall-ball reaction catch", pattern:"REACTION", req:[], priority:50, power:false, cue:"Throw a small ball at a wall, catch the rebound; step closer to speed it up.", ladder:["closer to wall","single hand","eyes-closed start"] },
+  { id:"light_switch",   name:"Random-cue directional sprints", pattern:"REACTION", req:[], priority:45, power:false, cue:"Sprint on an external cue (timer app, partner); react, don't anticipate.", ladder:["shorter cue gap"] },
 ];
 
 /* Session templates: slots reference movement patterns, never exercises. */
@@ -156,6 +160,17 @@ const TEMPLATES = {
       { pattern:"CORE",   target:"Trunk stiffness",          rx:{ sets:3, repLo:20, repHi:40, rest:60, unit:"s" } },
     ],
   },
+  fullramp: {
+    id:"fullramp", label:"Full-body (form focus)", type:"STRENGTH", color:"strength",
+    desc:"Third ramp-week strength day — moderate effort, perfect reps, groove the patterns.",
+    slots: [
+      { pattern:"SQUAT",  target:"Pattern practice",        rx:{ sets:2, repLo:10, repHi:12, rest:75 } },
+      { pattern:"H_PUSH", target:"Pattern practice",        rx:{ sets:2, repLo:10, repHi:12, rest:75 } },
+      { pattern:"H_PULL", target:"Pattern practice",        rx:{ sets:2, repLo:10, repHi:12, rest:75 } },
+      { pattern:"HINGE",  target:"Pattern practice",        rx:{ sets:2, repLo:10, repHi:12, rest:75 } },
+      { pattern:"CORE",   target:"Foundation",              rx:{ sets:2, repLo:12, repHi:15, rest:60 } },
+    ],
+  },
   light: {
     id:"light", label:"Light day — deep mobility", type:"LIGHT", color:"mobility",
     desc:"Long statics, easy walk, extra breath work. This day builds litheness.",
@@ -169,6 +184,10 @@ const TEMPLATES = {
 
 /* Default week order (day index 0–6). Strength-gym days get repositioned by the scheduler. */
 const WEEK_DEFAULT = ["lower","hiit","upper","zone2","power","light","rest"];
+
+/* Weeks 1–2 ramp (plan Part 7): 3 form-focused strength days + 1 HIIT + light days.
+   Plyo/reaction slots are additionally hidden by the week3 flag. */
+const WEEK_RAMP = ["lower","hiit","upper","light","fullramp","light","rest"];
 
 /* Mobility flows */
 const MOBILITY_FLOWS = {
@@ -221,6 +240,6 @@ const METRIC_DEFS = {
 const PATTERN_LABEL = {
   SQUAT:"Squat", HINGE:"Hinge", H_PUSH:"Horizontal push", V_PUSH:"Vertical push",
   H_PULL:"Horizontal pull", V_PULL:"Vertical pull", LUNGE:"Lunge", CARRY:"Carry",
-  CORE:"Core", PLYO:"Power / plyo", CARDIO:"Conditioning", REACTION:"Reaction",
+  CORE:"Core", PLYO:"Power / plyo", CARDIO:"Cardio", REACTION:"Reaction",
   MOBILITY:"Mobility", BREATH_HOLD:"Breath-hold",
 };

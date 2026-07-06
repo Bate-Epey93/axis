@@ -16,6 +16,7 @@ const defaultState = () => ({
   metrics: [],                   // {date, type, value}
   nutrition: {},                 // date -> {protein, sleep}
   pfPosition: "lying",
+  lastBackup: null,
   settings: { coherenceRate: 6, sound: true },
 });
 let S = load();
@@ -25,6 +26,58 @@ function load() {
   return defaultState();
 }
 function save() { localStorage.setItem(DB_KEY, JSON.stringify(S)); }
+
+/* Ask the browser not to evict our storage (iOS/Android honor this for installed PWAs) */
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+/* ---------- wake lock: keep the screen on while a timer/player overlay is up ---------- */
+let wakeLock = null;
+async function acquireWake() {
+  try { if (navigator.wakeLock && !wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+}
+function releaseWake() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+document.addEventListener("visibilitychange", () => {
+  // wake locks are auto-released on tab hide; reacquire if an overlay is still open
+  wakeLock = null;
+  const ov = document.getElementById("overlay");
+  if (document.visibilityState === "visible" && ov && !ov.classList.contains("hidden")) acquireWake();
+});
+
+/* ---------- backup ---------- */
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(S, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "axis-backup-" + todayISO() + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  S.lastBackup = todayISO(); save(); render();
+  toast("Backup exported — keep it somewhere safe");
+}
+function importBackup() {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "application/json,.json";
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(r.result);
+        if (typeof data !== "object" || !data || !("workoutLogs" in data) || !("trackLogs" in data)) throw new Error("bad");
+        S = Object.assign(defaultState(), data);
+        save(); render(); toast("Backup restored");
+      } catch (e) { toast("That file isn't an Axis backup"); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+function backupDue() {
+  if (!S.onboarded) return false;
+  return S.lastBackup ? daysBetween(S.lastBackup, todayISO()) >= 35 : programWeek() >= 2;
+}
 
 /* ---------- utils ---------- */
 const $ = (sel, el=document) => el.querySelector(sel);
@@ -67,7 +120,8 @@ function programWeek() {
 }
 function isRampWeeks() { return programWeek() <= 2; }
 function isDeload() { return S.deloadUntil && todayISO() <= S.deloadUntil; }
-function todayTemplate() { return TEMPLATES[S.weekOrder[programDay()]]; }
+function effectiveWeekOrder() { return isRampWeeks() ? WEEK_RAMP : S.weekOrder; }
+function todayTemplate() { return TEMPLATES[effectiveWeekOrder()[programDay()]]; }
 function weeksSinceDeload() {
   const anchor = S.lastDeloadPrompt || S.programStart;
   if (!anchor) return 0;
@@ -114,7 +168,9 @@ function progressionAdvice(ex, rx) {
   const allTop = doneSets.length >= rx.sets && doneSets.every(s => s.reps >= rx.repHi);
   const missedBottom = doneSets.filter(s => s.reps < rx.repLo).length >= 2;
   if (allTop) {
-    const step = ex.ladder && ex.ladder.length ? ex.ladder[Math.min(1, ex.ladder.length-1)] : "+load";
+    let step = ex.ladder && ex.ladder.length ? ex.ladder[Math.min(1, ex.ladder.length-1)] : "+load";
+    const bi = bandIndexOf(loads[loads.length-1]);
+    if (bi >= 0 && bi < BAND_ORDER.length - 1) step = `move up to the ${BAND_ORDER[bi+1]} band (or slow the eccentric)`;
     return { cls:"suggest", html:`Last time: <b>${doneSets.length}×${repStr}${loadStr}</b> — top of range hit. <b>Progress: ${esc(step)}</b>` };
   }
   if (missedBottom) {
@@ -262,6 +318,12 @@ function renderToday() {
       <div class="t-check">✓</div>
     </button>`).join("") + `</div>`;
 
+  const backupCard = backupDue() ? `
+    <div class="card due-card tappable" data-act="goto-recovery">
+      <h3>Backup due</h3>
+      <div class="meta">${S.lastBackup ? "Last export " + S.lastBackup : "Never exported"} — browsers can evict app storage. One tap in Recovery.</div>
+    </div>` : "";
+
   const dueMetrics = Object.keys(METRIC_DEFS).filter(t => ["BOLT","WAIST","BENCHMARK"].includes(t) && metricDue(t));
   const dueCard = dueMetrics.length && !isRampWeeks() ? `
     <div class="card due-card tappable" data-act="goto-progress">
@@ -277,6 +339,7 @@ function renderToday() {
     <div class="sec">Daily tracks — the floor</div>
     ${trackGrid}
     ${dueCard}
+    ${backupCard}
     <div class="sec">Quick timers</div>
     <div class="btn-row">
       <button class="btn ghost sm" data-act="open-hiit-timer">HIIT timer</button>
@@ -350,7 +413,8 @@ function drawAllCharts() {
 
 /* ---------- Plan ---------- */
 function renderPlan() {
-  const rows = S.weekOrder.map((tid, i) => {
+  const ramp = isRampWeeks();
+  const rows = effectiveWeekOrder().map((tid, i) => {
     const t = TEMPLATES[tid];
     const isGymDay = S.gymDays.includes(i);
     const isStrength = t.type === "STRENGTH";
@@ -367,6 +431,7 @@ function renderPlan() {
   return `
     <div class="hdr"><h1>Week plan</h1></div>
     <div class="sub">Mark which days the gym is likely. The heavy strength days should land on gym days — but every session has a full home fallback, so nothing blocks you.</div>
+    ${ramp ? `<div class="card due-card"><h3>Weeks 1–2 ramp</h3><div class="meta">You're on the ramp week: 3 form-focused strength days, 1 HIIT, light days between. The full 6-day split (power day, zone-2, plyo, reaction) takes over in week 3.</div></div>` : ""}
     <div class="card">${rows}</div>
     <div class="card">
       <h3>Scheduler rules</h3>
@@ -486,6 +551,16 @@ function renderMore() {
     <div class="card">
       <h3>Stress = the hidden lift</h3>
       <div class="info-note">Every coherence or meditation session is cortisol management, and cortisol is testosterone's direct antagonist. The soft stuff is the hard stuff.</div>
+    </div>
+
+    <div class="sec">Data</div>
+    <div class="card ${backupDue() ? "due-card" : ""}">
+      <h3>Backup</h3>
+      <div class="meta">${S.lastBackup ? "Last export: " + S.lastBackup : "Never exported."} All data lives on this device only — phone browsers can evict it if the app isn't opened for weeks. Export monthly; import moves data between phone and computer.</div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn primary sm" data-act="export-backup">Export backup</button>
+        <button class="btn ghost sm" data-act="import-backup">Import backup</button>
+      </div>
     </div>
 
     <div class="sec">Settings</div>
@@ -643,6 +718,7 @@ function renderSlot(s, si) {
           <span class="tag ${slot.pattern}">${PATTERN_LABEL[slot.pattern]}</span>
           <div class="ex-name">${esc(ex.name)}</div>
           <div class="rx">${esc(slot.target)} · ${rxStr}</div>
+          ${ex.cue ? `<div class="cue">${esc(ex.cue)}</div>` : ""}
           ${ex.power ? `<div class="power-flag">⚡ Power — full recovery between reps (${Math.max(rx.rest,120)}s enforced)</div>` : ""}
         </div>
         <button class="swap-btn" data-act="swap-ex" data-si="${si}">Swap</button>
@@ -653,7 +729,7 @@ function renderSlot(s, si) {
           <div class="set-row">
             <div class="set-n num">${xi+1}</div>
             <input inputmode="numeric" placeholder="${timeBased ? unit : "reps"}" value="${set.reps ?? ""}" data-set-reps data-si="${si}" data-xi="${xi}">
-            <input placeholder="${session.location === "gym" ? "kg" : "band / load"}" value="${esc(set.load || "")}" data-set-load data-si="${si}" data-xi="${xi}">
+            <button class="load-btn ${set.load ? "" : "empty"}" data-act="pick-load" data-si="${si}" data-xi="${xi}">${set.load ? esc(set.load) : (session.location === "gym" ? "kg" : "load")}</button>
             <button class="set-done ${set.done ? "on" : ""}" data-act="set-done" data-si="${si}" data-xi="${xi}">✓</button>
           </div>`).join("")}
       </div>
@@ -665,7 +741,6 @@ function bindSession(ov) {
   ov.oninput = e => {
     const t = e.target;
     if (t.matches("[data-set-reps]")) session.slots[t.dataset.si].sets[t.dataset.xi].reps = parseInt(t.value) || null;
-    if (t.matches("[data-set-load]")) session.slots[t.dataset.si].sets[t.dataset.xi].load = t.value;
     persistSession(false);
   };
   ov.onclick = e => {
@@ -689,6 +764,7 @@ function bindSession(ov) {
     }
     if (act === "mark-slot") { session.slots[si].sets.forEach(s => s.done = !session.slots[si].sets.every(x=>x.done) ? true : false); persistSession(false); renderSession(); }
     if (act === "swap-ex") openSwapSheet(parseInt(si));
+    if (act === "pick-load") openLoadSheet(parseInt(si), parseInt(xi));
     if (act === "hiit-from-session") openHiitTimer(session.tpl.hiitDefault);
     if (act === "bh-from-session") openBreathHold();
     if (act === "mob-static-from-session") openMobilityPlayer("static");
@@ -711,6 +787,59 @@ function openSwapSheet(si) {
       s.ex = EXERCISES.find(x => x.id === b.dataset.swap);
       closeSheet(); renderSession();
     };
+  });
+}
+
+function bandIndexOf(loadStr) {
+  if (!loadStr) return -1;
+  const m = String(loadStr).toLowerCase();
+  return BAND_ORDER.findIndex(c => m.includes(c));
+}
+
+function openLoadSheet(si, xi) {
+  const s = session.slots[si];
+  const cur = s.sets[xi].load || "";
+  const applyLoad = (val, all) => {
+    if (all) s.sets.forEach(x => x.load = val);
+    else s.sets[xi].load = val;
+    persistSession(false); closeSheet(); renderSession();
+  };
+  if (session.location === "gym") {
+    showSheet(`
+      <h3>Load — set ${xi + 1}</h3>
+      <input class="big-input num" inputmode="decimal" id="load-in" placeholder="kg" value="${esc(cur)}">
+      <div class="btn-row">
+        <button class="btn primary" id="load-one">This set</button>
+        <button class="btn ghost" id="load-all">All sets</button>
+      </div>
+    `, sheet => {
+      const val = () => sheet.querySelector("#load-in").value.trim();
+      sheet.querySelector("#load-one").onclick = () => applyLoad(val(), false);
+      sheet.querySelector("#load-all").onclick = () => applyLoad(val(), true);
+      sheet.querySelector("#load-in").focus();
+    });
+    return;
+  }
+  showSheet(`
+    <h3>Band / load — set ${xi + 1}</h3>
+    <div class="meta" style="margin-bottom:10px;">Lightest → heaviest. A tap fills this set and every set after it.</div>
+    <div class="band-row">
+      ${BAND_ORDER.map(c => `<button class="band-chip ${c}" data-band="${c} band">${c}</button>`).join("")}
+      <button class="band-chip bw" data-band="bodyweight">bodyweight</button>
+    </div>
+    <input class="big-input" id="load-custom" placeholder="custom — red ×2, 8 kg pack…" value="${esc(cur)}">
+    <div class="btn-row">
+      <button class="btn primary" id="load-save">This set</button>
+      <button class="btn ghost" id="load-save-all">All sets</button>
+    </div>
+  `, sheet => {
+    sheet.querySelectorAll("[data-band]").forEach(b => b.onclick = () => {
+      const v = b.dataset.band;
+      s.sets.forEach((x, i) => { if (i >= xi) x.load = v; });
+      persistSession(false); closeSheet(); renderSession();
+    });
+    sheet.querySelector("#load-save").onclick = () => applyLoad(sheet.querySelector("#load-custom").value.trim(), false);
+    sheet.querySelector("#load-save-all").onclick = () => applyLoad(sheet.querySelector("#load-custom").value.trim(), true);
   });
 }
 
@@ -752,20 +881,19 @@ function startRestTimer(secs, isPower) {
   const bar = $("#restbar");
   bar.classList.remove("hidden");
   bar.classList.toggle("power", !!isPower);
-  let left = secs;
+  let end = Date.now() + secs * 1000, total = secs, lastLeft = secs + 1;
   const draw = () => {
+    const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
     $("#restbar .rt-time").textContent = fmtClock(left);
-    $("#restbar .rt-fill").style.width = (left / secs * 100) + "%";
+    $("#restbar .rt-fill").style.width = (left / total * 100) + "%";
+    if (left <= 3 && left > 0 && left !== lastLeft) beepLo();
+    lastLeft = left;
+    if (left <= 0) { stopRestTimer(); beepHi(); toast(isPower ? "Fully recovered — next explosive rep" : "Rest over — next set"); }
   };
   draw();
-  restInt = setInterval(() => {
-    left--;
-    if (left <= 0) { stopRestTimer(); beepHi(); toast(isPower ? "Fully recovered — next explosive rep" : "Rest over — next set"); return; }
-    if (left <= 3) beepLo();
-    draw();
-  }, 1000);
+  restInt = setInterval(draw, 500);
   $("#restbar [data-act='skip-rest']").onclick = () => stopRestTimer();
-  $("#restbar [data-act='add-rest']").onclick = () => { left += 30; draw(); };
+  $("#restbar [data-act='add-rest']").onclick = () => { end += 30000; total += 30; draw(); };
 }
 function stopRestTimer() { clearInterval(restInt); restInt = null; $("#restbar").classList.add("hidden"); }
 
@@ -776,11 +904,13 @@ function getOverlay() {
   let ov = $("#overlay");
   if (!ov) { ov = document.createElement("div"); ov.id = "overlay"; ov.className = "overlay"; document.body.appendChild(ov); }
   ov.classList.remove("hidden");
+  acquireWake();
   return ov;
 }
 let overlayCleanup = null;
 function closeOverlay() {
   if (overlayCleanup) { overlayCleanup(); overlayCleanup = null; }
+  releaseWake();
   const ov = $("#overlay"); if (ov) { ov.onclick = null; ov.oninput = null; ov.classList.add("hidden"); ov.innerHTML = ""; }
 }
 function overlayShell(title, colorCls, bodyHtml) {
@@ -834,31 +964,42 @@ function openHiitTimer(cfg) {
   function runHiit() {
     $("#hiit-start").classList.add("hidden");
     $("#hiit-run").classList.remove("hidden");
-    let phase = "prep", left = 10, round = 1;
+    // full phase schedule computed up front; current phase derived from wall clock,
+    // so backgrounding the phone never desyncs the intervals
+    const sched = [{ p:"prep", d:10, r:1 }];
+    for (let r = 1; r <= rounds; r++) {
+      sched.push({ p:"work", d:work, r });
+      if (r < rounds) sched.push({ p:"rest", d:rest, r });
+    }
+    const total = sched.reduce((a, s) => a + s.d, 0);
+    const t0 = Date.now();
     const phaseEl = $("#h-phase"), clockEl = $("#h-clock"), roundEl = $("#h-round");
-    const setUI = () => {
-      const map = { prep:["GET READY","hiit-prep"], work:["WORK","hiit-work"], rest:["RECOVER","hiit-rest"], done:["DONE","hiit-done"] };
-      phaseEl.textContent = map[phase][0];
-      phaseEl.className = "phase " + map[phase][1];
-      clockEl.className = "clock num " + map[phase][1];
-      clockEl.textContent = fmtClock(left);
-      roundEl.textContent = phase === "done" ? "All rounds complete" : `Round ${round} / ${rounds}`;
-    };
-    setUI();
+    let lastIdx = -1, lastLeft = -1, finished = false;
     clearInterval(int);
     int = setInterval(() => {
-      left--;
-      if (left <= 3 && left > 0) beepLo();
-      if (left <= 0) {
-        if (phase === "prep") { phase = "work"; left = work; beepHi(); }
-        else if (phase === "work") {
-          if (round >= rounds) { phase = "done"; left = 0; clearInterval(int); beepDone(); markTrack("breath", {}); }
-          else { phase = "rest"; left = rest; beepHi(); }
-        }
-        else if (phase === "rest") { round++; phase = "work"; left = work; beepHi(); }
+      const el = (Date.now() - t0) / 1000;
+      if (el >= total) {
+        clearInterval(int);
+        phaseEl.textContent = "DONE"; phaseEl.className = "phase hiit-done";
+        clockEl.className = "clock num hiit-done"; clockEl.textContent = "0:00";
+        roundEl.textContent = "All rounds complete";
+        if (!finished) { finished = true; beepDone(); markTrack("breath", {}); }
+        return;
       }
-      setUI();
-    }, 1000);
+      let acc = 0, idx = 0;
+      while (el >= acc + sched[idx].d) { acc += sched[idx].d; idx++; }
+      const cur = sched[idx];
+      const left = Math.ceil(acc + cur.d - el);
+      if (idx !== lastIdx) { if (lastIdx >= 0) beepHi(); lastIdx = idx; }
+      if (left <= 3 && left > 0 && left !== lastLeft) beepLo();
+      lastLeft = left;
+      const map = { prep:["GET READY","hiit-prep"], work:["WORK","hiit-work"], rest:["RECOVER","hiit-rest"] };
+      phaseEl.textContent = map[cur.p][0];
+      phaseEl.className = "phase " + map[cur.p][1];
+      clockEl.className = "clock num " + map[cur.p][1];
+      clockEl.textContent = fmtClock(left);
+      roundEl.textContent = `Round ${cur.r} / ${rounds}`;
+    }, 250);
   }
 }
 
@@ -875,14 +1016,15 @@ function openBoxBreathing() {
       <button class="btn breath" style="max-width:240px;" id="bx-start">Begin — 4·4·4·4</button>
     </div>
     <div class="info-note" style="text-align:center;">Inhale 4 · hold 4 · exhale 4 · hold 4. Pre-lift focus or pre-sleep wind-down. 2–5 minutes.</div>`);
-  let int = null, running = false;
+  let int = null, running = false, t0 = 0, pausedAt = 0, lastPi = -1, marked = false;
   overlayCleanup = () => clearInterval(int);
   const SIDE = 240 - 18; // travel px
   $("#bx-start").onclick = () => {
-    if (running) { clearInterval(int); running = false; $("#bx-start").textContent = "Resume"; return; }
+    if (running) { clearInterval(int); running = false; pausedAt = Date.now(); $("#bx-start").textContent = "Resume"; return; }
     running = true; $("#bx-start").textContent = "Pause";
+    if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
+    pausedAt = 0;
     const phases = ["Inhale","Hold","Exhale","Hold"];
-    let pi = 0, count = 4, total = 0;
     const dot = $("#box-dot");
     const place = (pi, frac) => {
       // dot travels around square edges: top→right→bottom→left
@@ -893,20 +1035,17 @@ function openBoxBreathing() {
       else { x = 0; y = SIDE - frac*SIDE; }
       dot.style.transform = `translate(${x}px, ${y}px)`;
     };
-    const draw = () => {
-      $("#bx-phase").textContent = phases[pi];
-      $("#bx-count").textContent = count;
-      $("#bx-total").textContent = fmtClock(total);
-      place(pi, (4-count)/4);
-    };
-    draw();
     clearInterval(int);
     int = setInterval(() => {
-      count--; total++;
-      if (count <= 0) { pi = (pi+1)%4; count = 4; beepLo(); }
-      draw();
-      if (total >= 120 && total % 60 === 0) { markTrack("breath", { breathType:"box" }); }
-    }, 1000);
+      const total = (Date.now() - t0) / 1000;
+      const cyc = total % 16, pi = Math.floor(cyc / 4), within = cyc % 4;
+      if (pi !== lastPi) { if (lastPi >= 0) beepLo(); lastPi = pi; }
+      $("#bx-phase").textContent = phases[pi];
+      $("#bx-count").textContent = 4 - Math.floor(within);
+      $("#bx-total").textContent = fmtClock(Math.floor(total));
+      place(pi, within / 4);
+      if (total >= 120 && !marked) { marked = true; markTrack("breath", { breathType:"box" }); }
+    }, 100);
   };
 }
 
@@ -928,34 +1067,38 @@ function openCoherence(mode) {
     <div class="info-note" style="text-align:center;">${isMed
       ? "One hand on the abdomen, just below the sternum. Breathe into the hand. Attention rests at the solar plexus; when it wanders, return on the exhale."
       : half + "s in through the nose · " + half + "s out. This is the cortisol-lowering, testosterone-protecting session — not a soft extra."}</div>`);
-  let int = null, running = false;
+  let int = null, running = false, t0 = 0, pausedAt = 0;
   overlayCleanup = () => clearInterval(int);
   $("#pc-start").onclick = () => {
-    if (running) { clearInterval(int); running = false; $("#pc-start").textContent = "Resume"; return; }
+    if (running) { clearInterval(int); running = false; pausedAt = Date.now(); $("#pc-start").textContent = "Resume"; return; }
     running = true; $("#pc-start").textContent = "Pause";
+    if (pausedAt) t0 += Date.now() - pausedAt; else t0 = Date.now();
+    pausedAt = 0;
     const pc = $("#pc");
-    let left = mins * 60, inhale = true, phaseLeft = half;
     pc.style.transitionDuration = half + "s";
-    const cycle = () => {
-      pc.textContent = inhale ? "Inhale" : "Exhale";
-      pc.classList.toggle("inhale", inhale);
-      pc.classList.toggle("exhale", !inhale);
-    };
-    cycle();
+    let lastHalf = -1;
     clearInterval(int);
     int = setInterval(() => {
-      left--; phaseLeft--;
-      if (phaseLeft <= 0) { inhale = !inhale; phaseLeft = half; cycle(); }
-      $("#pc-total").textContent = fmtClock(Math.max(0,left)) + " remaining";
+      const el = (Date.now() - t0) / 1000;
+      const left = mins * 60 - el;
+      const hi = Math.floor(el / half);
+      if (hi !== lastHalf) {
+        lastHalf = hi;
+        const inhale = hi % 2 === 0;
+        pc.textContent = inhale ? "Inhale" : "Exhale";
+        pc.classList.toggle("inhale", inhale);
+        pc.classList.toggle("exhale", !inhale);
+      }
+      $("#pc-total").textContent = fmtClock(Math.max(0, Math.ceil(left))) + " remaining";
       if (left <= 0) {
-        clearInterval(int); running = false;
+        clearInterval(int); running = false; t0 = 0; pausedAt = 0;
         beepDone();
         markTrack(isMed ? "mind" : "breath", isMed ? {} : { breathType:"coherence" });
         pc.textContent = "Done ✓"; pc.classList.remove("inhale","exhale");
         $("#pc-start").textContent = "Again";
         toast(isMed ? "Meditation logged 🧘" : "Coherence session logged");
       }
-    }, 1000);
+    }, 250);
   };
 }
 
@@ -972,24 +1115,29 @@ function openBreathHold() {
       <button class="btn ghost sm" id="bh-finish">Finish & log</button>
     </div>
     <div class="info-note">While walking: normal exhale → hold to <b>moderate</b> air hunger (not panic) → release, nasal-only recovery ≥60 s → repeat 5–8×. Never while driving or in water.</div>`);
-  let int = null, holding = false, t = 0, rounds = 0, best = 0;
+  let int = null, holding = false, holdStart = 0, rounds = 0, best = 0;
   overlayCleanup = () => clearInterval(int);
   const clock = $("#bh-clock"), phaseEl = $("#bh-phase"), roundEl = $("#bh-round"), btn = $("#bh-btn");
   btn.onclick = () => {
     if (!holding) {
-      holding = true; t = 0; btn.textContent = "Release";
+      holding = true; holdStart = Date.now(); btn.textContent = "Release";
       phaseEl.textContent = "HOLDING — walk on"; phaseEl.style.color = "var(--c-hiit)";
       clearInterval(int);
-      int = setInterval(() => { t++; clock.textContent = fmtClock(t); }, 1000);
+      int = setInterval(() => { clock.textContent = fmtClock(Math.floor((Date.now() - holdStart) / 1000)); }, 250);
     } else {
-      holding = false; rounds++; best = Math.max(best, t);
+      holding = false; rounds++;
+      best = Math.max(best, Math.floor((Date.now() - holdStart) / 1000));
       roundEl.textContent = `Round ${rounds} · best hold ${fmtClock(best)}`;
       btn.textContent = "Exhale & hold";
       phaseEl.textContent = "Nasal recovery — 60 s easy"; phaseEl.style.color = "var(--c-breath)";
       clearInterval(int);
-      let rec = 60;
-      clock.textContent = fmtClock(rec);
-      int = setInterval(() => { rec--; clock.textContent = fmtClock(Math.max(0,rec)); if (rec<=0) { clearInterval(int); phaseEl.textContent = "Ready for next hold"; beepHi(); } }, 1000);
+      const recEnd = Date.now() + 60000;
+      let fired = false;
+      int = setInterval(() => {
+        const rec = Math.max(0, Math.ceil((recEnd - Date.now()) / 1000));
+        clock.textContent = fmtClock(rec);
+        if (rec <= 0 && !fired) { fired = true; clearInterval(int); phaseEl.textContent = "Ready for next hold"; beepHi(); }
+      }, 250);
     }
   };
   $("#bh-finish").onclick = () => {
@@ -1008,16 +1156,17 @@ function openBolt() {
       <div class="round" id="bolt-note" style="max-width:300px; line-height:1.5;">Normal exhale through the nose, then start. Tap again at the <b>first urge</b> to breathe — the first swallow or diaphragm twitch. Not a max hold.</div>
       <button class="btn breath" style="max-width:260px;" id="bolt-btn">Exhale, then tap to start</button>
     </div>`);
-  let int = null, t = 0, running = false;
+  let int = null, startT = 0, running = false;
   overlayCleanup = () => clearInterval(int);
   $("#bolt-btn").onclick = () => {
     if (!running) {
-      running = true; t = 0;
+      running = true; startT = Date.now();
       $("#bolt-phase").textContent = "Holding — tap at first urge";
       $("#bolt-btn").textContent = "First urge — stop";
-      int = setInterval(() => { t++; $("#bolt-clock").textContent = t; }, 1000);
+      int = setInterval(() => { $("#bolt-clock").textContent = Math.floor((Date.now() - startT) / 1000); }, 250);
     } else {
       clearInterval(int); running = false;
+      const t = Math.max(1, Math.round((Date.now() - startT) / 1000));
       addMetric("BOLT", t);
       markTrack("breath", { breathType:"bolt" });
       $("#bolt-phase").textContent = "Logged ✓";
@@ -1054,43 +1203,49 @@ function openPelvic() {
   $("#pf-start").onclick = function () {
     this.classList.add("hidden");
     const fill = $("#pf-fill"), phaseEl = $("#pf-phase"), clockEl = $("#pf-clock"), roundEl = $("#pf-round");
-    // sequence: 2 slow sets (10 reps of 5s/5s), rest 30s between, then flicks set (15 reps 1s/1s)
-    let set = 1, rep = 1, squeezing = true, left = 5;
-    const flickSet = () => set === 3;
-    const setup = () => {
-      const dur = flickSet() ? 1 : 5;
-      left = dur;
-      fill.style.transitionDuration = dur + "s";
-      fill.style.width = squeezing ? "100%" : "0%";
-      phaseEl.textContent = squeezing ? "SQUEEZE" : "RELEASE";
-      phaseEl.style.color = squeezing ? "var(--c-pelvic)" : "var(--text-2)";
-      clockEl.textContent = rep;
-      roundEl.textContent = `Set ${set} of 3 · ${flickSet() ? "quick flicks" : "slow holds"} · rep ${rep}/${flickSet() ? 15 : 10}`;
-    };
-    setup();
-    clearInterval(int);
-    int = setInterval(() => {
-      left--;
-      if (left > 0) return;
-      if (squeezing) { squeezing = false; setup(); if (!flickSet()) beepLo(); return; }
-      // completed a rep
-      squeezing = true; rep++;
-      const maxRep = flickSet() ? 15 : 10;
-      if (rep > maxRep) {
-        set++; rep = 1;
-        if (set > 3) {
-          clearInterval(int);
-          phaseEl.textContent = "Complete"; clockEl.textContent = "✓"; fill.style.width = "0%";
-          roundEl.textContent = "3 sets done";
-          markTrack("pelvic");
-          beepDone(); toast("Pelvic floor logged · 🔥 " + trackStreak("pelvic") + "d");
-          return;
-        }
-        beepHi();
+    // schedule: set 1+2 = 10 reps × (5 s squeeze + 5 s release) = 100 s each;
+    // set 3 = 15 flicks × (1 s + 1 s) = 30 s. All derived from wall clock.
+    const SLOW = 100, TOTAL = SLOW * 2 + 30;
+    const t0 = Date.now();
+    let lastKey = "";
+    const draw = () => {
+      const el = (Date.now() - t0) / 1000;
+      if (el >= TOTAL) {
+        clearInterval(int);
+        phaseEl.textContent = "Complete"; clockEl.textContent = "✓"; fill.style.width = "0%";
+        roundEl.textContent = "3 sets done";
+        markTrack("pelvic");
+        beepDone(); toast("Pelvic floor logged · 🔥 " + trackStreak("pelvic") + "d");
+        return;
       }
-      setup();
-      if (flickSet()) beep(1000, 0.06, 0.18);
-    }, 1000);
+      let set, rep, within, dur, maxRep;
+      if (el < SLOW * 2) {
+        set = el < SLOW ? 1 : 2;
+        const e = el % SLOW;
+        rep = Math.floor(e / 10) + 1; within = e % 10; dur = 5; maxRep = 10;
+      } else {
+        set = 3;
+        const e = el - SLOW * 2;
+        rep = Math.floor(e / 2) + 1; within = e % 2; dur = 1; maxRep = 15;
+      }
+      const squeezing = within < dur;
+      const key = set + "-" + rep + "-" + squeezing;
+      if (key !== lastKey) {
+        lastKey = key;
+        fill.style.transitionDuration = dur + "s";
+        fill.style.width = squeezing ? "100%" : "0%";
+        phaseEl.textContent = squeezing ? "SQUEEZE" : "RELEASE";
+        phaseEl.style.color = squeezing ? "var(--c-pelvic)" : "var(--text-2)";
+        clockEl.textContent = rep;
+        roundEl.textContent = `Set ${set} of 3 · ${set === 3 ? "quick flicks" : "slow holds"} · rep ${rep}/${maxRep}`;
+        if (set === 3) { if (squeezing) beep(1000, 0.06, 0.18); }
+        else if (squeezing && rep === 1 && set === 2) beepHi();
+        else beepLo();
+      }
+    };
+    draw();
+    clearInterval(int);
+    int = setInterval(draw, 250);
   };
 }
 
@@ -1123,8 +1278,24 @@ function openMobilityPlayer(mode) {
   ov.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { clearInterval(int); closeOverlay(); openMobilityPlayer(b.dataset.mode); });
   $("#mb-start").onclick = function () {
     this.classList.add("hidden");
-    let mi = 0, left = flow.moves[mi].secs;
+    const bounds = []; let total = 0;
+    flow.moves.forEach(m => { total += m.secs; bounds.push(total); });
+    const t0 = Date.now();
+    let lastMi = -1, lastLeft = -1;
     const draw = () => {
+      const el = (Date.now() - t0) / 1000;
+      if (el >= total) {
+        clearInterval(int);
+        $("#mb-name").textContent = "Flow complete ✓"; $("#mb-clock").textContent = "—"; $("#mb-cue").textContent = "";
+        markTrack("mobility");
+        beepDone(); toast("Mobility logged · 🔥 " + trackStreak("mobility") + "d");
+        return;
+      }
+      let mi = 0; while (el >= bounds[mi]) mi++;
+      const left = Math.ceil(bounds[mi] - el);
+      if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; }
+      if (left <= 3 && left !== lastLeft) beepLo();
+      lastLeft = left;
       $("#mb-name").textContent = flow.moves[mi].name;
       $("#mb-cue").textContent = flow.moves[mi].cue;
       $("#mb-clock").textContent = fmtClock(left);
@@ -1132,21 +1303,7 @@ function openMobilityPlayer(mode) {
     };
     draw();
     clearInterval(int);
-    int = setInterval(() => {
-      left--;
-      if (left <= 0) {
-        mi++;
-        if (mi >= flow.moves.length) {
-          clearInterval(int);
-          $("#mb-name").textContent = "Flow complete ✓"; $("#mb-clock").textContent = "—"; $("#mb-cue").textContent = "";
-          markTrack("mobility");
-          beepDone(); toast("Mobility logged · 🔥 " + trackStreak("mobility") + "d");
-          return;
-        }
-        left = flow.moves[mi].secs; beepHi();
-      } else if (left <= 3) beepLo();
-      draw();
-    }, 1000);
+    int = setInterval(draw, 250);
   };
 }
 
@@ -1227,6 +1384,9 @@ $("#screen").addEventListener("click", e => {
   if (act === "open-box") openBoxBreathing();
   if (act === "open-bolt") openBolt();
   if (act === "goto-progress") { currentTab = "progress"; render(); }
+  if (act === "goto-recovery") { currentTab = "more"; render(); }
+  if (act === "export-backup") exportBackup();
+  if (act === "import-backup") importBackup();
   if (act === "log-metric") openMetricSheet(b.dataset.type);
   if (act === "toggle-gym") {
     const d = parseInt(b.dataset.day);
