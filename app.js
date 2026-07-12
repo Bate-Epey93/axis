@@ -310,6 +310,7 @@ function motifSVG(kind, color) {
     bolt:     `<path d="M58 12 L34 52 H52 L40 88"/>`,                                                             // lightning
     pulse:    `<path d="M10 54 H30 L42 28 L56 78 L66 46 H90"/>`,                                                  // heartbeat
     lotus:    `<path d="M50 24 Q60 42 50 60 Q40 42 50 24"/><path d="M26 40 Q32 58 50 62 Q34 60 22 50" opacity="0.6"/><path d="M74 40 Q68 58 50 62 Q66 60 78 50" opacity="0.6"/><path d="M18 64 Q34 76 50 74 Q66 76 82 64" opacity="0.4"/>`, // lotus
+    paw:      `<ellipse cx="50" cy="62" rx="16" ry="13"/><circle cx="28" cy="42" r="7"/><circle cx="44" cy="34" r="7"/><circle cx="60" cy="35" r="7"/><circle cx="74" cy="45" r="7"/>`, // paw print
   };
   return `<svg class="motif" viewBox="0 0 100 100" aria-hidden="true" style="color:${color}">
     <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">${strokes[kind] || strokes.mind}</g>
@@ -351,6 +352,7 @@ const PATTERN_MOTIF = {
   CORE:   ["core","var(--c-pelvic)"],
   PLYO:   ["bolt","var(--c-hiit)"],         REACTION:["bolt","var(--c-hiit)"],
   CARDIO: ["pulse","var(--c-hiit)"],
+  FLOW:   ["paw","var(--c-nutrition)"],
 };
 const METRIC_MOTIF = {
   BOLT: ["breath","var(--c-breath)"], WAIST: ["mind","var(--c-strength)"], BODYWEIGHT: ["strength","var(--c-rest)"],
@@ -538,6 +540,7 @@ function openExerciseSheet(exId) {
   showSheet(`
     <span class="tag ${ex.pattern}">${esc(PATTERN_LABEL[ex.pattern])}</span>
     <h3 style="margin-top:12px;">${esc(ex.name)}</h3>
+    ${stickAnimFor(ex) ? `<canvas class="demo-canvas" id="ex-demo" width="340" height="200" aria-label="movement demo"></canvas>` : ""}
     ${info.desc ? `<div class="meta" style="margin-bottom:12px; line-height:1.6;">${esc(info.desc)}</div>` : ""}
     ${info.primary ? `
       <div class="muscle-row"><span class="m-label">Primary</span>${info.primary.map(m => `<span class="chip m-chip">${esc(m)}</span>`).join("")}</div>` : ""}
@@ -552,6 +555,9 @@ function openExerciseSheet(exId) {
       ? `<button class="btn ghost">Locked — needs ${missing.map(m => esc((EQUIPMENT.find(q => q.id === m) || { name: m }).name)).join(", ")}</button>`
       : `<button class="btn strength" data-start-single="${ex.id}">Do this now${gymOnly ? " · at the gym" : ""}</button>`}
   `, sheet => {
+    const cv = sheet.querySelector("#ex-demo");
+    const anim = stickAnimFor(ex);
+    if (cv && anim) startStickAnim(cv, anim);
     const b = sheet.querySelector("[data-start-single]");
     if (b) b.onclick = () => { closeSheet(); startSingleExercise(b.dataset.startSingle); };
   });
@@ -561,7 +567,9 @@ function startSingleExercise(exId) {
   const ex = EXERCISES.find(e => e.id === exId);
   if (!ex) return;
   const location = ex.req.includes("gym") ? "gym" : "home";
-  const rx = ex.power
+  const rx = ex.pattern === "FLOW"
+    ? { sets: 3, repLo: 30, repHi: 60, rest: 60, unit: "s" }
+    : ex.power
     ? { sets: 4, repLo: 3, repHi: 5, rest: 120 }
     : { sets: 3, repLo: 8, repHi: 12, rest: 90 };
   const slot = { pattern: ex.pattern, target: PATTERN_LABEL[ex.pattern], rx };
@@ -2214,6 +2222,154 @@ function openAerobicDose() {
   };
 }
 
+
+/* ---------- stick-figure movement demos ----------
+   Procedural 2D "ink figure": each animation is 2–4 keyframe poses of named
+   joints in a 100×100 side-view box (x right, y down, floor y≈88), interpolated
+   and looped on canvas. Pattern-level animations cover every exercise; animal
+   flows get their own rigs. Joints: hd head, n neck, h hip, k1/a1 front knee+
+   ankle, k2/a2 back leg, e/w near arm, e2/w2 far arm (optional). */
+const STICK_ANIMS = {
+  squat:   { poses: [
+    { hd:[50,16], n:[50,25], h:[50,52], k1:[48,70], a1:[48,87], k2:[53,70], a2:[53,87], e:[51,38], w:[52,49] },
+    { hd:[45,37], n:[46,45], h:[41,63], k1:[58,64], a1:[53,86], k2:[61,66], a2:[56,87], e:[56,49], w:[66,45] },
+  ]},
+  hinge:   { poses: [
+    { hd:[50,16], n:[50,25], h:[50,52], k1:[48,70], a1:[48,87], k2:[53,70], a2:[53,87], e:[51,38], w:[52,49] },
+    { hd:[66,37], n:[62,43], h:[43,57], k1:[45,72], a1:[46,87], k2:[48,72], a2:[49,87], e:[60,53], w:[58,67] },
+  ]},
+  lunge:   { poses: [
+    { hd:[50,20], n:[50,29], h:[50,56], k1:[60,66], a1:[60,86], k2:[42,70], a2:[36,86], e:[51,42], w:[52,52] },
+    { hd:[50,28], n:[50,37], h:[50,63], k1:[63,66], a1:[62,86], k2:[42,78], a2:[31,86], e:[51,50], w:[52,60] },
+  ]},
+  pushup:  { poses: [
+    { hd:[21,53], n:[29,56], h:[57,60], k1:[70,63], a1:[84,66], k2:[71,65], a2:[85,68], e:[33,68], w:[32,80] },
+    { hd:[20,66], n:[28,68], h:[57,68], k1:[70,69], a1:[84,70], k2:[71,71], a2:[85,72], e:[40,76], w:[32,80] },
+  ]},
+  press:   { poses: [
+    { hd:[50,18], n:[50,27], h:[50,53], k1:[48,70], a1:[48,87], k2:[53,70], a2:[53,87], e:[58,31], w:[57,21] },
+    { hd:[50,17], n:[50,26], h:[50,52], k1:[48,70], a1:[48,87], k2:[53,70], a2:[53,87], e:[55,17], w:[54,5] },
+  ]},
+  row:     { poses: [
+    { hd:[64,38], n:[61,44], h:[43,58], k1:[45,72], a1:[46,87], k2:[48,72], a2:[49,87], e:[62,54], w:[63,68] },
+    { hd:[64,38], n:[61,44], h:[43,58], k1:[45,72], a1:[46,87], k2:[48,72], a2:[49,87], e:[64,47], w:[57,53] },
+  ]},
+  pullup:  { props: [[28,10,72,10]], poses: [
+    { hd:[50,32], n:[50,40], h:[50,63], k1:[47,73], a1:[45,85], k2:[52,73], a2:[50,85], e:[53,24], w:[51,11] },
+    { hd:[50,19], n:[50,27], h:[50,52], k1:[45,63], a1:[43,76], k2:[53,64], a2:[51,77], e:[57,21], w:[51,11] },
+  ]},
+  plank:   { poses: [
+    { hd:[21,53], n:[29,56], h:[57,60], k1:[70,62], a1:[84,65], k2:[71,64], a2:[85,67], e:[31,68], w:[30,80] },
+    { hd:[21,55], n:[29,58], h:[57,58], k1:[70,61], a1:[84,65], k2:[71,63], a2:[85,67], e:[31,69], w:[30,80] },
+  ]},
+  carry:   { poses: [
+    { hd:[50,16], n:[50,25], h:[50,52], k1:[56,69], a1:[59,87], k2:[45,70], a2:[41,87], e:[52,38], w:[53,52] },
+    { hd:[50,16], n:[50,25], h:[50,52], k1:[45,69], a1:[41,87], k2:[56,70], a2:[59,87], e:[52,38], w:[53,52] },
+  ]},
+  jump:    { poses: [
+    { hd:[46,38], n:[47,46], h:[42,63], k1:[58,64], a1:[53,86], k2:[61,66], a2:[56,87], e:[42,52], w:[36,60] },
+    { hd:[50,6],  n:[50,15], h:[50,42], k1:[52,55], a1:[50,68], k2:[56,56], a2:[54,70], e:[58,17], w:[61,7] },
+  ]},
+  run:     { loop:"cycle", poses: [
+    { hd:[50,18], n:[50,27], h:[50,54], k1:[60,64], a1:[58,79], k2:[44,72], a2:[36,84], e:[58,36], w:[63,45], e2:[43,38], w2:[38,29] },
+    { hd:[50,16], n:[50,25], h:[50,52], k1:[52,68], a1:[52,84], k2:[49,69], a2:[47,85], e:[52,37], w:[55,47], e2:[49,37], w2:[46,47] },
+    { hd:[50,18], n:[50,27], h:[50,54], k1:[44,66], a1:[38,80], k2:[58,70], a2:[64,84], e:[42,36], w:[37,45], e2:[57,38], w2:[62,29] },
+    { hd:[50,16], n:[50,25], h:[50,52], k1:[49,68], a1:[47,84], k2:[52,69], a2:[52,85], e:[49,37], w:[46,47], e2:[52,37], w2:[55,47] },
+  ]},
+  bear:    { loop:"cycle", poses: [
+    { hd:[22,42], n:[30,46], h:[60,45], k1:[64,62], a1:[61,87], k2:[71,59], a2:[75,87], e:[34,63], w:[32,87], e2:[43,61], w2:[46,87] },
+    { hd:[22,42], n:[30,46], h:[60,45], k1:[71,59], a1:[75,87], k2:[64,62], a2:[61,87], e:[43,61], w:[46,87], e2:[34,63], w2:[32,87] },
+  ]},
+  beast:   { loop:"cycle", poses: [
+    { hd:[22,50], n:[30,53], h:[59,56], k1:[63,73], a1:[62,87], k2:[70,71], a2:[74,87], e:[33,68], w:[32,87], e2:[42,66], w2:[44,87] },
+    { hd:[22,50], n:[30,53], h:[59,56], k1:[70,71], a1:[74,87], k2:[63,73], a2:[62,87], e:[42,66], w:[44,87], e2:[33,68], w2:[32,87] },
+  ]},
+  crab:    { loop:"cycle", poses: [
+    { hd:[69,40], n:[63,45], h:[43,55], k1:[31,58], a1:[27,85], k2:[37,60], a2:[33,85], e:[69,62], w:[72,85], e2:[76,60], w2:[80,84] },
+    { hd:[69,40], n:[63,45], h:[43,55], k1:[37,60], a1:[33,85], k2:[31,58], a2:[27,85], e:[76,60], w:[80,84], e2:[69,62], w2:[72,85] },
+  ]},
+  crabreach: { poses: [
+    { hd:[69,40], n:[63,45], h:[43,55], k1:[31,58], a1:[27,85], k2:[37,60], a2:[33,85], e:[69,62], w:[72,85], e2:[76,60], w2:[80,84] },
+    { hd:[66,36], n:[60,42], h:[44,42], k1:[30,52], a1:[27,85], k2:[36,54], a2:[33,85], e:[50,30], w:[35,21], e2:[76,58], w2:[80,84] },
+  ]},
+  scorpion: { poses: [
+    { hd:[22,50], n:[30,53], h:[59,56], k1:[63,73], a1:[62,87], k2:[70,71], a2:[74,87], e:[33,68], w:[32,87], e2:[42,66], w2:[44,87] },
+    { hd:[22,48], n:[30,51], h:[56,52], k1:[62,72], a1:[61,87], k2:[52,36], a2:[40,26], e:[33,67], w:[32,87], e2:[42,65], w2:[44,87] },
+  ]},
+  ape:     { poses: [
+    { hd:[46,40], n:[47,48], h:[44,64], k1:[58,64], a1:[54,86], k2:[61,66], a2:[57,87], e:[52,62], w:[50,85], e2:[57,60], w2:[56,85] },
+    { hd:[50,40], n:[51,48], h:[57,50], k1:[66,60], a1:[69,76], k2:[70,62], a2:[73,78], e:[51,62], w:[50,85], e2:[56,60], w2:[56,85] },
+  ]},
+  duck:    { loop:"cycle", poses: [
+    { hd:[46,38], n:[47,46], h:[42,63], k1:[58,64], a1:[55,86], k2:[59,68], a2:[49,87], e:[54,50], w:[62,50] },
+    { hd:[46,38], n:[47,46], h:[42,63], k1:[59,68], a1:[49,87], k2:[58,64], a2:[55,86], e:[54,50], w:[62,50] },
+  ]},
+  inchworm: { poses: [
+    { hd:[57,52], n:[55,56], h:[46,49], k1:[47,68], a1:[48,87], k2:[50,68], a2:[51,87], e:[57,66], w:[56,79] },
+    { hd:[21,53], n:[29,56], h:[57,60], k1:[70,63], a1:[84,66], k2:[71,65], a2:[85,68], e:[33,68], w:[32,80] },
+  ]},
+  kickthrough: { poses: [
+    { hd:[22,50], n:[30,53], h:[59,56], k1:[63,73], a1:[62,87], k2:[70,71], a2:[74,87], e:[33,68], w:[32,87], e2:[42,66], w2:[44,87] },
+    { hd:[35,38], n:[40,46], h:[56,54], k1:[38,70], a1:[23,80], k2:[66,68], a2:[72,85], e:[30,50], w:[26,38], e2:[46,62], w2:[48,86] },
+  ]},
+};
+const PATTERN_ANIM = {
+  SQUAT:"squat", HINGE:"hinge", LUNGE:"lunge", H_PUSH:"pushup", V_PUSH:"press",
+  H_PULL:"row", V_PULL:"pullup", CORE:"plank", CARRY:"carry", PLYO:"jump",
+  CARDIO:"run", REACTION:"run", FLOW:"bear",
+};
+const EX_ANIM = {
+  bear_crawl:"bear", beast_crawl:"beast", lizard_crawl:"beast", crab_walk:"crab",
+  crab_reach:"crabreach", scorpion_reach:"scorpion", ape_walk:"ape", duck_walk:"duck",
+  frog_hop:"jump", inchworm:"inchworm", kick_through:"kickthrough", hindu_squat:"squat",
+  hindu_pushup:"inchworm", tyson_pushup:"pushup", plank:"plank", hollow_hold:"plank",
+};
+function stickAnimFor(ex) {
+  return STICK_ANIMS[EX_ANIM[ex.id]] || STICK_ANIMS[PATTERN_ANIM[ex.pattern]] || null;
+}
+let stickRaf = 0;
+function startStickAnim(canvas, anim) {
+  cancelAnimationFrame(stickRaf);
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue("--text").trim() || "#F4F2EC";
+  const faint = css.getPropertyValue("--line").trim() || "#26262E";
+  // pingpong by default: A→B→A; "cycle" wraps A→B→A directly
+  const seq = anim.loop === "cycle" ? anim.poses : anim.poses.concat(anim.poses.slice(1, -1).reverse());
+  const dur = anim.dur || 1100;
+  const ease = t => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2;
+  const sx = v => v / 100 * W, sy = v => v / 100 * H;
+  const seg = (a, b) => { ctx.beginPath(); ctx.moveTo(sx(a[0]), sy(a[1])); ctx.lineTo(sx(b[0]), sy(b[1])); ctx.stroke(); };
+  const tick = now => {
+    const total = dur * seq.length;
+    const ph = (now % total) / dur;
+    const i = Math.floor(ph), t = ease(ph - i);
+    const A = seq[i], B = seq[(i + 1) % seq.length];
+    const P = {};
+    for (const k of Object.keys(A)) {
+      const b = B[k] || A[k];
+      P[k] = [A[k][0] + (b[0] - A[k][0]) * t, A[k][1] + (b[1] - A[k][1]) * t];
+    }
+    ctx.clearRect(0, 0, W, H);
+    // floor + props
+    ctx.strokeStyle = faint; ctx.lineWidth = 2; ctx.lineCap = "round";
+    seg([6, 88], [94, 88]);
+    (anim.props || []).forEach(p => seg([p[0], p[1]], [p[2], p[3]]));
+    // far limbs, fainter (depth)
+    ctx.strokeStyle = ink; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    if (P.e2) { ctx.globalAlpha = 0.4; ctx.lineWidth = 4.5; seg(P.n, P.e2); seg(P.e2, P.w2); ctx.globalAlpha = 1; }
+    ctx.globalAlpha = 0.55; ctx.lineWidth = 4.5; seg(P.h, P.k2); seg(P.k2, P.a2); ctx.globalAlpha = 1;
+    // near limbs + spine
+    ctx.lineWidth = 5.5;
+    seg(P.n, P.h); seg(P.h, P.k1); seg(P.k1, P.a1); seg(P.n, P.e); seg(P.e, P.w);
+    // head
+    ctx.beginPath(); ctx.arc(sx(P.hd[0]), sy(P.hd[1]), sx(6), 0, Math.PI * 2); ctx.stroke();
+    stickRaf = requestAnimationFrame(tick);
+  };
+  stickRaf = requestAnimationFrame(tick);
+}
+
 /* ---------- Breathwork hub ---------- */
 function openBreathHub() {
   showSheet(`
@@ -2245,7 +2401,7 @@ function showSheet(html, bind) {
   document.body.appendChild(back);
   if (bind) bind(back.querySelector(".sheet"));
 }
-function closeSheet() { const s = $("#sheet"); if (s) s.remove(); }
+function closeSheet() { cancelAnimationFrame(stickRaf); const s = $("#sheet"); if (s) s.remove(); }
 
 /* ---------- metric logging sheet ---------- */
 function openMetricSheet(type) {

@@ -177,6 +177,7 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .tag.CORE { background:#2c1440; color:var(--c-pelvic); }
 .tag.PLYO,.tag.CARDIO,.tag.REACTION,.tag.BREATH_HOLD { background:#3a1024; color:var(--c-hiit); }
 .tag.MOBILITY { background:#12331f; color:var(--c-nutrition); }
+.tag.FLOW { background:#12331f; color:var(--c-nutrition); }
 
 /* ---------- buttons — pill ---------- */
 .btn {
@@ -529,6 +530,14 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .chart-card .motif { top: auto; bottom: -20px; right: -16px; width: 78px; height: 78px; opacity: 0.14; }
 .ex-card, .menu-card { overflow: hidden; }
 .ex-card .motif, .menu-card .motif { top: -20px; right: -16px; width: 80px; height: 80px; opacity: 0.28; }
+
+/* ---------- movement demo canvas ---------- */
+.demo-canvas {
+  width: 100%; height: auto; display: block;
+  background: linear-gradient(178deg, var(--surface-2) 0%, var(--surface) 30%);
+  border: 1px solid var(--line); border-radius: 16px;
+  margin: 4px 0 12px;
+}
 
 /* ---------- muscle chips (exercise detail) ---------- */
 .muscle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }

@@ -104,6 +104,18 @@ const EXERCISES = [
   { id:"mountain_climber",name:"Mountain climbers",    pattern:"CARDIO", req:[], priority:45, power:false, cue:"Hips low, hands stacked under shoulders, drive knees fast.", ladder:["+work time","cross-body"] },
   { id:"high_knees",     name:"High knees",            pattern:"CARDIO", req:[], priority:40, power:false, cue:"Knees to hip height, stay on the balls of the feet, pump the arms.", ladder:["+work time"] },
   { id:"shadowbox",      name:"Shadowboxing rounds",   pattern:"CARDIO", req:[], priority:48, power:false, cue:"Move your feet, snap punches back fast, breathe out on every strike.", ladder:["+rounds","add level changes"] },
+  // ---- ANIMAL FLOW / LOCOMOTION ----
+  { id:"bear_crawl",    name:"Bear crawl",            pattern:"FLOW", req:[], priority:70, power:false, cue:"Hands under shoulders, hips high-ish, opposite hand and foot move together. Slow and quiet beats fast and sloppy.", ladder:["+distance","slower (more control)","backwards","weighted (pack)"] },
+  { id:"beast_crawl",   name:"Traveling beast",       pattern:"FLOW", req:[], priority:72, power:false, cue:"Quadruped, knees one inch off the floor, back flat. Crawl contralaterally keeping the knees hovering the whole way.", ladder:["hold 30s first","+distance","slower steps","limb lifts in the hold"] },
+  { id:"crab_walk",     name:"Crab walk",             pattern:"FLOW", req:[], priority:66, power:false, cue:"Belly to the sky, hips lifted, fingers pointing toward the feet. Step opposite hand and foot; don't let the hips sag.", ladder:["+distance","backwards","slower","crab reach at each stop"] },
+  { id:"crab_reach",    name:"Crab reach",            pattern:"FLOW", req:[], priority:64, power:false, cue:"From crab, press the hips up and reach one arm overhead across your body, opening the chest to the ceiling. Alternate sides.", ladder:["+reps","longer reach hold","flow into crab walk"] },
+  { id:"scorpion_reach",name:"Scorpion reach",        pattern:"FLOW", req:[], priority:62, power:false, cue:"From beast, sweep one leg up and across your back toward the opposite side, hips rotating open — then return with control.", ladder:["smaller range first","+reps","slower sweep","full scorpion switch"] },
+  { id:"ape_walk",      name:"Ape (lateral travel)",  pattern:"FLOW", req:[], priority:68, power:false, cue:"Deep squat, plant both hands to one side, shift the weight and hop the feet to follow. Land soft back in the squat.", ladder:["+distance","deeper squat","quieter landings","faster transfers"] },
+  { id:"duck_walk",     name:"Duck walk",             pattern:"FLOW", req:[], priority:58, power:false, cue:"Stay in the bottom of a squat and walk. Chest tall, heels down as much as your ankles allow.", ladder:["+distance","hands off knees","lower posture"] },
+  { id:"frog_hop",      name:"Frog hop",              pattern:"FLOW", req:[], priority:56, power:false, cue:"Deep squat, hands plant forward, hips hop toward the hands. Land soft, reset, repeat.", ladder:["+distance","bigger hops","continuous rhythm"] },
+  { id:"inchworm",      name:"Inchworm",              pattern:"FLOW", req:[], priority:60, power:false, cue:"Fold forward, walk the hands out to a plank, then walk the feet toward the hands with legs as straight as they'll allow.", ladder:["+reps","push-up at the bottom","hands walk past plank"] },
+  { id:"kick_through",  name:"Kick-through",          pattern:"FLOW", req:[], priority:63, power:false, cue:"From beast, lift a hand and the opposite foot, and kick that leg through to the front as the chest opens sideways. Alternate.", ladder:["slow singles","+reps","continuous alternating","add the reach"] },
+  { id:"lizard_crawl",  name:"Lizard crawl",          pattern:"FLOW", req:[], priority:54, power:false, cue:"Low crawl: chest hovers near the floor, elbow and knee travel together on the same side, body stays level like a lizard.", ladder:["short distances","lower body position","slower"] },
   // ---- REACTION ----
   { id:"reaction_ball_dr",name:"Reaction-ball drops",  pattern:"REACTION", req:["reaction_ball"], priority:85, power:false, cue:"Drop, react to the bounce, catch low — athletic stance throughout.", ladder:["single-hand catch","off-wall"] },
   { id:"ladder_drill",   name:"Agility-ladder drills", pattern:"REACTION", req:["agility_ladder"], priority:80, power:false, cue:"Eyes forward, not down; speed comes after the pattern is clean.", ladder:["new patterns","faster"] },
@@ -247,6 +259,7 @@ const CATEGORIES = [
   { id:"core",    label:"Core",           patterns:["CORE","CARRY"],                        color:"pelvic" },
   { id:"power",   label:"Power & speed",  patterns:["PLYO","REACTION"],                     color:"hiit" },
   { id:"cardio",  label:"Conditioning",   patterns:["CARDIO"],                              color:"hiit" },
+  { id:"flow",    label:"Animal flow",    patterns:["FLOW"],                                color:"nutrition" },
   { id:"pelvic",  label:"Sexual health",  practice:"pelvic",                                color:"pelvic" },
   { id:"breath",  label:"Breathwork",     practice:"breath",                                color:"breath" },
   { id:"mobility",label:"Mobility",       practice:"mobility",                              color:"mobility" },
@@ -270,7 +283,7 @@ const PRACTICES = [
 const PATTERN_LABEL = {
   SQUAT:"Squat", HINGE:"Hinge", H_PUSH:"Horizontal push", V_PUSH:"Vertical push",
   H_PULL:"Horizontal pull", V_PULL:"Vertical pull", LUNGE:"Lunge", CARRY:"Carry",
-  CORE:"Core", PLYO:"Power / plyo", CARDIO:"Cardio", REACTION:"Reaction",
+  CORE:"Core", PLYO:"Power / plyo", CARDIO:"Cardio", REACTION:"Reaction", FLOW:"Animal flow",
   MOBILITY:"Mobility", BREATH_HOLD:"Breath-hold",
 };
 
@@ -338,6 +351,17 @@ const EX_INFO = {
   mountain_climber:{ desc:"Running the knees under a plank. Conditioning plus core — keeps the heart rate up while the trunk holds the line.", primary:["Cardio system","Core"], secondary:["Hip flexors","Shoulders"] },
   high_knees:     { desc:"Sprinting in place, knees to hip height. A no-space conditioning drill that doubles as sprint-form practice.", primary:["Cardio system","Hip flexors"], secondary:["Calves","Core"] },
   shadowbox:      { desc:"Boxing rounds against the air. Conditioning, coordination, and reaction rolled together — and the best-feeling cardio in the plan.", primary:["Cardio system","Shoulders"], secondary:["Core","Calves"] },
+  bear_crawl:     { desc:"The gateway crawl: hands and feet, opposite limbs moving together. Contralateral crawling wires coordination between the brain's hemispheres while loading shoulders and core — strength and motor control in one drill.", primary:["Shoulders","Core","Coordination"], secondary:["Quads","Wrists","Hip flexors"] },
+  beast_crawl:    { desc:"Animal Flow's foundational position — quadruped with knees hovering an inch off the floor — taken traveling. An 8-week study found this style of training improved functional mobility ~22% and shoulder stability ~16%. Full-body tension you can feel everywhere.", primary:["Core","Shoulders","Coordination"], secondary:["Quads","Hip flexors","Wrists"] },
+  crab_walk:      { desc:"Walking belly-up on hands and feet. The rare movement that trains shoulder extension and the whole posterior chain while undoing desk posture — glutes and upper back do the carrying.", primary:["Glutes","Shoulders","Triceps"], secondary:["Hamstrings","Core","Wrists"] },
+  crab_reach:     { desc:"From crab, hips press up as one arm reaches overhead — a loaded backbend in disguise. Develops thoracic mobility, shoulder stability, and rotational flexibility through the spine; the antidote to a rounded upper back.", primary:["Thoracic spine","Glutes","Shoulders"], secondary:["Hip flexors (stretch)","Core"] },
+  scorpion_reach: { desc:"A leg sweeps up and across the back from beast position. Trains quickness, coordination, and core-to-limb force transfer while opening the hips and spine through rotation — one of Animal Flow's signature stretches.", primary:["Hip mobility","Spine rotation","Core"], secondary:["Shoulders","Glutes"] },
+  ape_walk:       { desc:"Lateral travel out of a deep squat: hands plant, feet follow. Grooves the deep squat, builds explosive weight transfer through the arms, and conditions hips and ankles — the most athletic of the basic forms.", primary:["Hips","Quads","Shoulders"], secondary:["Ankles","Wrists","Core"] },
+  duck_walk:      { desc:"Walking without leaving the bottom of a squat. Relentless time-under-tension for the legs and one of the best ankle and hip mobility drills that also happens to burn.", primary:["Quads","Hip mobility"], secondary:["Ankles","Glutes","Calves"] },
+  frog_hop:       { desc:"Squat, plant the hands, hop the hips forward. Builds explosive hip power from a full-depth position and confidence taking weight through the arms — plyometric and mobility work at once.", primary:["Hips","Quads","Power"], secondary:["Shoulders","Ankles","Core"] },
+  inchworm:       { desc:"Fold, walk the hands to a plank, walk the feet back in. A rolling stretch-and-strengthen for the whole back line — hamstrings lengthen while shoulders and core work every trip.", primary:["Hamstrings (stretch)","Shoulders","Core"], secondary:["Calves","Spine"] },
+  kick_through:   { desc:"Animal Flow's fundamental switch: from beast, one leg kicks through to the front as the chest opens. Teaches fluid transitions between positions — the coordination glue that turns isolated shapes into flow.", primary:["Core","Coordination","Hip mobility"], secondary:["Shoulders","Obliques"] },
+  lizard_crawl:   { desc:"The hardest crawl: body hovering low and level while elbow and knee travel together. Pressing strength, hip mobility, and total-body control — the graduation exam of ground movement.", primary:["Chest","Core","Hip mobility"], secondary:["Shoulders","Triceps","Coordination"] },
   reaction_ball_dr:{ desc:"Dropping a six-sided ball and catching its unpredictable bounce. Pure reaction-time training — the eyes-to-hands loop gets measurably faster.", primary:["Reaction time","Hand-eye coordination"], secondary:["Ankle stabilizers"] },
   ladder_drill:   { desc:"Fast feet through ladder rungs. Foot speed and movement patterns that transfer to every sport — and a sneaky conditioning hit.", primary:["Foot speed","Coordination"], secondary:["Calves","Cardio system"] },
   wall_ball_catch:{ desc:"Throwing a small ball at a wall and catching the rebound. DIY reaction training — closer and faster as you improve.", primary:["Reaction time","Hand-eye coordination"], secondary:["Shoulders"] },
@@ -363,6 +387,7 @@ const PATTERN_PAIRS = {
   LUNGE:["CORE","H_PULL","H_PUSH"],  CARRY:["CORE","SQUAT"],
   CORE:["CARDIO","CARRY","SQUAT"],   PLYO:["CORE","H_PULL"],
   CARDIO:["CORE","H_PULL"],          REACTION:["PLYO","CARDIO"],
+  FLOW:["CORE","CARDIO","H_PULL"],
 };
 
 /* Plain-language explainers for movement patterns — shown when a tag is tapped */
@@ -379,6 +404,7 @@ const PATTERN_EXPLAIN = {
   PLYO:"explosive jumps and throws — trains speed",
   CARDIO:"gets the heart rate up",
   REACTION:"react fast to something unpredictable",
+  FLOW:"ground-based animal movements — whole-body coordination, mobility, and strength woven together",
   MOBILITY:"stretching and moving joints through full range",
   BREATH_HOLD:"controlled breath holds that build CO2 tolerance",
 };
