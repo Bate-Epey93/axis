@@ -129,15 +129,32 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .card h3 { font-size: 1.05rem; font-weight: 700; }
 .card .meta { color: var(--text-2); font-size: 0.84rem; margin-top: 3px; line-height: 1.5; }
 
-.stripe { border-left: 3px solid var(--line); }
-.stripe.strength { border-left-color: var(--c-strength); }
-.stripe.hiit     { border-left-color: var(--c-hiit); }
-.stripe.breath   { border-left-color: var(--c-breath); }
-.stripe.mobility { border-left-color: var(--c-mobility); }
-.stripe.pelvic   { border-left-color: var(--c-pelvic); }
-.stripe.mind     { border-left-color: var(--c-mind); }
-.stripe.nutrition{ border-left-color: var(--c-nutrition); }
-.stripe.rest     { border-left-color: var(--c-rest); }
+/* tinted cards: a mild glossy wash of the domain color across the whole card */
+.stripe {
+  --tint-c: var(--c-rest);
+  background:
+    radial-gradient(130% 90% at 18% -25%, color-mix(in srgb, var(--tint-c) 22%, transparent), transparent 58%),
+    linear-gradient(168deg,
+      color-mix(in srgb, var(--tint-c) 13%, var(--surface-2)) 0%,
+      color-mix(in srgb, var(--tint-c) 6%, var(--surface)) 65%);
+  border-color: color-mix(in srgb, var(--tint-c) 28%, var(--line));
+}
+.stripe.strength { --tint-c: var(--c-strength); }
+.stripe.hiit     { --tint-c: var(--c-hiit); }
+.stripe.breath   { --tint-c: var(--c-breath); }
+.stripe.mobility { --tint-c: var(--c-mobility); }
+.stripe.pelvic   { --tint-c: var(--c-pelvic); }
+.stripe.mind     { --tint-c: var(--c-mind); }
+.stripe.nutrition{ --tint-c: var(--c-nutrition); }
+.stripe.rest     { --tint-c: var(--c-rest); }
+:root[data-theme="light"] .stripe {
+  background:
+    radial-gradient(130% 90% at 18% -25%, color-mix(in srgb, var(--tint-c) 16%, transparent), transparent 58%),
+    linear-gradient(168deg,
+      color-mix(in srgb, var(--tint-c) 10%, var(--surface-2)) 0%,
+      color-mix(in srgb, var(--tint-c) 4%, var(--surface)) 65%);
+  border-color: color-mix(in srgb, var(--tint-c) 24%, var(--line));
+}
 
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .dot.strength{background:var(--c-strength); box-shadow:0 0 12px color-mix(in srgb, var(--c-strength) 55%, transparent)}
@@ -273,7 +290,6 @@ h3 { letter-spacing: -0.01em; text-wrap: balance; }
 .ex-card .ex-side { margin-left: auto; text-align: right; flex: none; }
 .ex-card.locked { opacity: 0.45; }
 .ex-card .ex-last { font-family: var(--mono); font-size: 0.66rem; color: var(--text-3); letter-spacing: 0.05em; }
-.practice-card { border-left: 3px solid var(--line); }
 
 /* ---------- tab bar ---------- */
 #tabbar {
