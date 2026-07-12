@@ -17,10 +17,12 @@ const defaultState = () => ({
   nutrition: {},                 // date -> {protein, sleep}
   pfPosition: "lying",
   lastBackup: null,
+  lastReview: null,
+  comebackDismissed: null,
   customWorkouts: [],
   todayOverride: null,           // {id, date} — custom workout pinned to today
   dayOverrides: {},              // dayIdx -> {id, until|null} — custom workout replacing a weekly day
-  settings: { coherenceRate: 6, sound: true },
+  settings: { coherenceRate: 6, sound: true, voice: true },
 });
 let S = load();
 function load() {
@@ -118,6 +120,16 @@ function beep(freq=880, dur=0.12, vol=0.25) {
     g.gain.setValueAtTime(vol, AC.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
     o.connect(g).connect(AC.destination); o.start(); o.stop(AC.currentTime + dur);
+  } catch (e) {}
+}
+/* ---------- voice guidance (Web Speech — offline, no assets) ---------- */
+function say(text, opts) {
+  if (!S.settings.voice || !("speechSynthesis" in window)) return;
+  try {
+    if (!opts || !opts.queue) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = (opts && opts.rate) || 1;
+    speechSynthesis.speak(u);
   } catch (e) {}
 }
 const beepHi = () => beep(1200, 0.15);
@@ -265,6 +277,106 @@ function addMetric(type, value) {
   save();
 }
 
+/* ---------- comeback detection ---------- */
+function lastWorkoutGap() {
+  const done = S.workoutLogs.filter(l => l.completed);
+  if (!done.length) return null;
+  const last = done.reduce((a, l) => l.date > a ? l.date : a, done[0].date);
+  return daysBetween(last, todayISO());
+}
+
+/* ---------- weekly review ---------- */
+function isoDaysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function weekReviewDue() {
+  if (!S.onboarded || programWeek() < 2 && programDay() < 6) return false;
+  if (!S.lastReview) return programDay() === 6 || daysBetween(S.programStart, todayISO()) >= 6;
+  return daysBetween(S.lastReview, todayISO()) >= 7;
+}
+function openWeeklyReview() {
+  const from = isoDaysAgo(6), prevFrom = isoDaysAgo(13), prevTo = isoDaysAgo(7);
+  const inRange = (l, a, b) => l.date >= a && l.date <= b;
+  const thisLogs = S.workoutLogs.filter(l => l.completed && inRange(l, from, todayISO()));
+  const prevLogs = S.workoutLogs.filter(l => l.completed && inRange(l, prevFrom, prevTo));
+  const days = new Set(thisLogs.map(l => l.date)).size;
+  const mins = Math.round(thisLogs.reduce((a, l) => a + (l.durationSecs || 0), 0) / 60);
+  const prevMins = Math.round(prevLogs.reduce((a, l) => a + (l.durationSecs || 0), 0) / 60);
+  const vol = Math.round(thisLogs.reduce((a, l) => a + sessionScore(l), 0));
+  const prevVol = Math.round(prevLogs.reduce((a, l) => a + sessionScore(l), 0));
+  const trackNames = { pelvic:"Pelvic floor", breath:"Breathwork", mobility:"Mobility", mind:"Meditation" };
+  const trackCounts = {};
+  for (const k of Object.keys(trackNames)) {
+    trackCounts[k] = 0;
+    for (let n = 0; n <= 6; n++) { const t = S.trackLogs[isoDaysAgo(n)]; if (t && t[k]) trackCounts[k]++; }
+  }
+  const weakest = Object.keys(trackCounts).sort((a, b) => trackCounts[a] - trackCounts[b])[0];
+  const dues = ["BOLT","WAIST","BENCHMARK"].filter(t => metricDue(t)).map(t => METRIC_DEFS[t].label);
+  let suggestion;
+  if (days <= 2) suggestion = "Two or fewer sessions this week. Don't chase it — just make the next scheduled one.";
+  else if (trackCounts[weakest] < 4) suggestion = trackNames[weakest] + " slipped to " + trackCounts[weakest] + "/7 — it's one tap, and it's the quiet work that moves your goals.";
+  else if (prevMins && mins < prevMins * 0.7) suggestion = "A lighter week (" + mins + " vs " + prevMins + " min). Fine if intended — deload is a tool, drift isn't.";
+  else if (prevVol && vol > prevVol * 1.05) suggestion = "Volume up on last week. Keep sleep and protein up so it lands as muscle.";
+  else suggestion = "Steady week. Consistency is the whole strategy — do it again.";
+  const trend = (cur, old, unit) => old ? `${cur} ${unit} <span style="color:${cur >= old ? "var(--c-nutrition)" : "var(--c-hiit)"}">(${cur >= old ? "+" : ""}${cur - old} vs last wk)</span>` : `${cur} ${unit}`;
+  showSheet(`
+    <div style="text-align:center; margin-bottom:6px;">${flameSVG("var(--c-mind)")}</div>
+    <h3 style="text-align:center;">Weekly review</h3>
+    <div class="meta" style="text-align:center; margin-bottom:14px;">Last 7 days</div>
+    <div class="eq-row"><div class="eq-name">Sessions</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${days} of 6 training days</div></div>
+    <div class="eq-row"><div class="eq-name">Training time</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${trend(mins, prevMins, "min")}</div></div>
+    <div class="eq-row"><div class="eq-name">Volume score</div><div class="eq-unlocks num" style="font-size:1rem; color:var(--text);">${trend(vol, prevVol, "")}</div></div>
+    ${Object.keys(trackNames).map(k => `<div class="eq-row"><div class="eq-name">${trackNames[k]}</div><div class="eq-unlocks num" style="color:${trackCounts[k] >= 5 ? "var(--c-nutrition)" : trackCounts[k] >= 3 ? "var(--text)" : "var(--c-hiit)"};">${trackCounts[k]}/7 days</div></div>`).join("")}
+    ${dues.length ? `<div class="eq-row"><div class="eq-name">Due to re-measure</div><div class="eq-unlocks" style="color:var(--c-mind);">${dues.join(" · ")}</div></div>` : ""}
+    <div class="card stripe mind" style="margin-top:12px;"><div class="meta"><b style="color:var(--text);">One thing:</b> ${suggestion}</div></div>
+    <button class="btn primary" id="review-done">Done — next week</button>
+  `, sheet => {
+    sheet.querySelector("#review-done").onclick = () => { S.lastReview = todayISO(); save(); closeSheet(); render(); };
+  });
+}
+
+/* ---------- calendar reminders (.ics — no server, phone-native alerts) ---------- */
+function buildICS(trainTime, windTime) {
+  const BYDAYS = ["MO","TU","WE","TH","FR","SA","SU"];
+  const start = new Date(S.programStart + "T00:00:00");
+  const restByday = BYDAYS[(start.getDay() + 6 + 6) % 7]; // JS sun=0 → mo-indexed, +6 days for rest day
+  const trainDays = BYDAYS.filter(d => d !== restByday).join(",");
+  const t = todayISO().replace(/-/g, "");
+  const [th, tm] = trainTime.split(":"), [wh, wm] = windTime.split(":");
+  const stamp = t + "T000000";
+  const ev = (uid, dtstart, rrule, summary, desc) => [
+    "BEGIN:VEVENT", "UID:" + uid + "@axis.local", "DTSTAMP:" + stamp,
+    "DTSTART:" + dtstart, "RRULE:" + rrule,
+    "SUMMARY:" + summary, "DESCRIPTION:" + desc,
+    "BEGIN:VALARM", "TRIGGER:PT0M", "ACTION:DISPLAY", "DESCRIPTION:" + summary, "END:VALARM",
+    "END:VEVENT",
+  ].join("\r\n");
+  const md = parseInt(S.programStart.slice(8, 10), 10);
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Axis//Reminders//EN",
+    ev("axis-train", t + "T" + th + tm + "00", "FREQ=WEEKLY;BYDAY=" + trainDays, "Axis — today's session + daily tracks", "Open Axis. The session adapts to wherever you are."),
+    ev("axis-rest", t + "T" + th + tm + "00", "FREQ=WEEKLY;BYDAY=" + restByday, "Axis — rest day (tracks still count)", "Recovery day. Pelvic floor, breath, mobility, meditation."),
+    ev("axis-wind", t + "T" + wh + wm + "00", "FREQ=DAILY", "Axis — wind-down breath", "Box breathing + meditation. Protect the sleep that protects testosterone."),
+    ev("axis-measure", t + "T09000" + "0", "FREQ=MONTHLY;BYMONTHDAY=" + md, "Axis — monthly re-measure", "BOLT, waist, benchmark. Two minutes of honesty."),
+    "END:VCALENDAR"].join("\r\n");
+}
+function openReminderSheet() {
+  showSheet(`
+    <h3>Calendar reminders</h3>
+    <div class="meta" style="margin-bottom:12px;">Axis can't send push notifications from a web app — but your calendar can. This exports a calendar file with recurring reminders: training days, the rest day, a nightly wind-down, and the monthly re-measure. Open the file and your phone adds them with normal alerts.</div>
+    <div class="eq-row"><div class="eq-name">Training reminder</div><input type="time" id="rem-train" value="17:30" class="big-input num" style="width:140px; margin:0; padding:8px; font-size:1rem;"></div>
+    <div class="eq-row"><div class="eq-name">Wind-down</div><input type="time" id="rem-wind" value="21:30" class="big-input num" style="width:140px; margin:0; padding:8px; font-size:1rem;"></div>
+    <button class="btn primary" style="margin-top:14px;" id="rem-go">Export calendar file</button>
+  `, sheet => {
+    sheet.querySelector("#rem-go").onclick = () => {
+      const ics = buildICS(sheet.querySelector("#rem-train").value || "17:30", sheet.querySelector("#rem-wind").value || "21:30");
+      const blob = new Blob([ics], { type: "text/calendar" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "axis-reminders.ics";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      closeSheet(); toast("Calendar file exported — open it to add the reminders");
+    };
+  });
+}
+
 /* =====================================================================
    RENDERING
 ===================================================================== */
@@ -401,7 +513,24 @@ function renderToday() {
       </div>`;
   }
 
-  const warn = overtraining ? `
+  const gap = lastWorkoutGap();
+  const comeback = gap != null && gap >= 4 && tpl.type !== "REST" && !doneToday && S.comebackDismissed !== todayISO();
+  const comebackCard = comeback ? `
+    <div class="card stripe nutrition">
+      <h3>${gap} days away — and you're back</h3>
+      <div class="meta">That's the whole game. Missed days are data, not failure; the plan absorbs them. Pick your re-entry:</div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn nutrition sm" data-act="comeback-easy">Ease back in</button>
+        <button class="btn ghost sm" data-act="comeback-full">Full session</button>
+      </div>
+      ${gap >= 14 ? `<button class="btn ghost sm" style="margin-top:8px;" data-act="comeback-restart">Restart at week 1 (recommended after 2+ weeks off)</button>` : ""}
+    </div>` : "";
+  const reviewCard = weekReviewDue() ? `
+    <div class="card due-card tappable" data-act="open-review">
+      <h3>${flameSVG("var(--c-mind)")} Weekly review ready</h3>
+      <div class="meta">Sessions, minutes, volume, and track adherence — one honest minute.</div>
+    </div>` : "";
+  const warn = overtraining && !comeback ? `
     <div class="card warn-card">
       <h3>${brushIcon("alert","var(--c-hiit)")} ${consec} hard days in a row</h3>
       <div class="info-note">Seven straight days drives cortisol up and testosterone down. Take the rest day, or swap today for light mobility.</div>
@@ -454,7 +583,7 @@ function renderToday() {
   return `
     <div class="hdr"><h1>Axis</h1><span class="date">${esc(dateStr)}</span></div>
     <div class="sub num"><span style="color:var(--c-strength); font-weight:700;">Week ${week} · Day ${programDay()+1} of 7</span><span style="color:var(--text-3);"> · </span><span style="color:var(--c-mind); font-weight:700;">${flameSVG("var(--c-mind)")} ${workoutStreak()}-day streak</span></div>
-    ${warn}${deloadCard}
+    ${comebackCard}${reviewCard}${warn}${deloadCard}
     ${sessionCard}
     <div class="sec">Daily tracks — the floor</div>
     ${trackGrid}
@@ -1079,15 +1208,21 @@ function openConductor(w) {
       let acc = 0, idx = 0;
       while (el >= acc + sched[idx].d) { acc += sched[idx].d; idx++; }
       const cur = sched[idx], left = Math.ceil(acc + cur.d - el);
-      if (idx !== lastMark) { if (lastMark >= 0) beepHi(); lastMark = idx; }
+      if (idx !== lastMark) {
+        if (lastMark >= 0) beepHi();
+        lastMark = idx;
+        if (cur.p === "work") say("Work. Round " + cur.r);
+        else if (cur.p === "rest") say("Recover");
+      }
       const map = { prep: ["GET READY", "hiit-prep"], work: ["WORK", "hiit-work"], rest: ["RECOVER", "hiit-rest"] };
       setUI(map[cur.p][0], map[cur.p][1], fmtClock(left), `Round ${cur.r} / ${cfg.rounds}`);
     } else if (mode === "emom") {
       const total = cfg.minutes * 60;
       if (el >= total) { if (!done) { done = true; beepDone(); } clearInterval(int); setUI("DONE", "hiit-done", "0:00", cfg.minutes + " minutes complete"); return; }
       const minute = Math.floor(el / 60);
-      if (minute !== lastMark) { if (lastMark >= 0) beepHi(); lastMark = minute; }
-      const ex = exs[minute % exs.length];
+      const exNow = exs[minute % exs.length];
+      if (minute !== lastMark) { if (lastMark >= 0) beepHi(); lastMark = minute; if (exNow) say(exNow.name); }
+      const ex = exNow;
       setUI(ex ? ex.name : "WORK", "hiit-work", fmtClock(60 - Math.floor(el % 60)), `Minute ${minute + 1} / ${cfg.minutes}`);
     } else if (mode === "amrap") {
       const left = cfg.minutes * 60 - el;
@@ -1257,6 +1392,13 @@ function renderRecovery() {
       <div class="info-note">Every coherence or meditation session is cortisol management, and cortisol is testosterone's direct antagonist. The soft stuff is the hard stuff.</div>
     </div>
 
+    <div class="sec">Reminders</div>
+    <div class="card stripe mind">
+      <h3>Calendar reminders</h3>
+      <div class="meta">Training days, rest day, nightly wind-down, monthly re-measure — as recurring calendar alerts your phone actually delivers.</div>
+      <button class="btn mind sm" style="margin-top:12px;" data-act="open-reminders">Set up reminders</button>
+    </div>
+
     <div class="sec">Data</div>
     <div class="card ${backupDue() ? "due-card" : ""}">
       <h3>Backup</h3>
@@ -1271,6 +1413,8 @@ function renderRecovery() {
     <div class="card">
       <div class="eq-row"><div><div class="eq-name">Theme</div><div class="eq-unlocks">${(S.settings.theme || "dark") === "light" ? "Light — sumi on washi" : (S.settings.theme === "auto" ? "Auto — follows the system" : "Dark — ink")}</div></div>
         <button class="btn ghost sm" data-act="cycle-theme">${{ dark:"Dark", light:"Light", auto:"Auto" }[S.settings.theme || "dark"]}</button></div>
+      <div class="eq-row"><div><div class="eq-name">Voice guidance</div><div class="eq-unlocks">Spoken cues in timers & flows — for eyes-closed practice</div></div>
+        <button class="eq-check ${S.settings.voice ? "on" : ""}" data-act="toggle-voice" aria-label="Toggle voice"></button></div>
       <div class="eq-row"><div class="eq-name">Timer sounds</div>
         <button class="eq-check ${S.settings.sound ? "on" : ""}" data-act="toggle-sound" aria-label="Toggle sound"></button></div>
       <div class="eq-row"><div><div class="eq-name">Coherence rate</div><div class="eq-unlocks num">${S.settings.coherenceRate} breaths/min</div></div>
@@ -1660,7 +1804,7 @@ function startRestTimer(secs, isPower) {
     $("#restbar .rt-fill").style.width = (left / total * 100) + "%";
     if (left <= 3 && left > 0 && left !== lastLeft) beepLo();
     lastLeft = left;
-    if (left <= 0) { stopRestTimer(); beepHi(); toast(isPower ? "Fully recovered — next explosive rep" : "Rest over — next set"); }
+    if (left <= 0) { stopRestTimer(); beepHi(); say("Rest over"); toast(isPower ? "Fully recovered — next explosive rep" : "Rest over — next set"); }
   };
   draw();
   restInt = setInterval(draw, 500);
@@ -1768,7 +1912,12 @@ function openHiitTimer(cfg) {
       while (el >= acc + sched[idx].d) { acc += sched[idx].d; idx++; }
       const cur = sched[idx];
       const left = Math.ceil(acc + cur.d - el);
-      if (idx !== lastIdx) { if (lastIdx >= 0) beepHi(); lastIdx = idx; }
+      if (idx !== lastIdx) {
+        if (lastIdx >= 0) beepHi();
+        lastIdx = idx;
+        if (cur.p === "work") say("Work. Round " + cur.r);
+        else if (cur.p === "rest") say("Recover");
+      }
       if (left <= 3 && left > 0 && left !== lastLeft) beepLo();
       lastLeft = left;
       const map = { prep:["GET READY","hiit-prep"], work:["WORK","hiit-work"], rest:["RECOVER","hiit-rest"] };
@@ -1871,6 +2020,7 @@ function openCoherence(mode) {
       if (hi !== lastHalf) {
         lastHalf = hi;
         const inhale = hi % 2 === 0;
+        say(inhale ? "In" : "Out");
         pc.textContent = inhale ? "Inhale" : "Exhale";
         pc.classList.toggle("inhale", inhale);
         pc.classList.toggle("exhale", !inhale);
@@ -1907,6 +2057,7 @@ function openBreathHold() {
   btn.onclick = () => {
     if (!holding) {
       holding = true; holdStart = Date.now(); btn.textContent = "Release";
+      say("Hold");
       phaseEl.textContent = "HOLDING — walk on"; phaseEl.style.color = "var(--c-hiit)";
       clearInterval(int);
       int = setInterval(() => { clock.textContent = fmtClock(Math.floor((Date.now() - holdStart) / 1000)); }, 250);
@@ -1915,6 +2066,7 @@ function openBreathHold() {
       best = Math.max(best, Math.floor((Date.now() - holdStart) / 1000));
       roundEl.textContent = `Round ${rounds} · best hold ${fmtClock(best)}`;
       btn.textContent = "Exhale & hold";
+      say("Recover. Nose only.");
       phaseEl.textContent = "Nasal recovery — 60 s easy"; phaseEl.style.color = "var(--c-breath)";
       clearInterval(int);
       const recEnd = Date.now() + 60000;
@@ -2015,7 +2167,10 @@ function openPelvic() {
     const squeezing = within < dur;
     const key = set + "-" + rep + "-" + squeezing;
     if (key !== lastKey) {
+      const setChanged = !lastKey.startsWith(set + "-");
       lastKey = key;
+      if (setChanged && set === 3) say("Quick flicks. One second on, one off.");
+      else if (set < 3) say(squeezing ? "Squeeze" : "Release");
       fill.style.transitionDuration = dur + "s";
       fill.style.width = squeezing ? "100%" : "0%";
       phaseEl.textContent = squeezing ? "SQUEEZE" : "RELEASE";
@@ -2086,7 +2241,7 @@ function openMobilityPlayer(mode) {
     }
     let mi = 0; while (el >= bounds[mi]) mi++;
     const left = Math.ceil(bounds[mi] - el);
-    if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; }
+    if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; say(flow.moves[mi].name + ". " + flow.moves[mi].cue); }
     if (left <= 3 && left !== lastLeft) beepLo();
     lastLeft = left;
     $("#mb-name").textContent = flow.moves[mi].name;
@@ -2144,7 +2299,7 @@ function openYogaFlow() {
     }
     let mi = 0; while (el >= bounds[mi]) mi++;
     const left = Math.ceil(bounds[mi] - el);
-    if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; }
+    if (mi !== lastMi) { if (lastMi >= 0) beepHi(); lastMi = mi; say(flow.moves[mi].name + ". " + flow.moves[mi].cue); }
     if (left <= 3 && left !== lastLeft) beepLo();
     lastLeft = left;
     $("#yg-name").textContent = flow.moves[mi].name;
@@ -2471,6 +2626,20 @@ $("#screen").addEventListener("click", e => {
     save(); render(); toast("Back to the standard plan for that day");
   }
   if (act === "open-builder") openBuilder();
+  if (act === "open-review") openWeeklyReview();
+  if (act === "comeback-easy") {
+    S.comebackDismissed = todayISO();
+    S.weekOrder[programDay()] = "light"; save(); render();
+    toast("Today is light mobility — momentum first, intensity later");
+  }
+  if (act === "comeback-full") { S.comebackDismissed = todayISO(); save(); render(); openLocationSheet(); }
+  if (act === "comeback-restart") {
+    S.comebackDismissed = todayISO();
+    S.programStart = todayISO(); S.lastDeloadPrompt = null; S.deloadUntil = null;
+    save(); render();
+    toast("Week 1 ramp restarted — form first, load later");
+  }
+  if (act === "open-reminders") openReminderSheet();
   if (act === "run-custom") runCustom(b.dataset.id);
   if (act === "del-custom") {
     const w = S.customWorkouts.find(x => x.id === b.dataset.id);
@@ -2521,6 +2690,7 @@ $("#screen").addEventListener("click", e => {
     });
   }
   if (act === "toggle-sound") { S.settings.sound = !S.settings.sound; save(); render(); }
+  if (act === "toggle-voice") { S.settings.voice = !S.settings.voice; save(); render(); if (S.settings.voice) say("Voice guidance on"); }
   if (act === "cycle-theme") {
     const order = ["dark", "light", "auto"];
     S.settings.theme = order[(order.indexOf(S.settings.theme || "dark") + 1) % 3];
